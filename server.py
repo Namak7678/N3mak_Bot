@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 import re
+import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from functools import partial
@@ -24,7 +25,9 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config" / "workforce.json"
-RUNTIME_PATH = ROOT / ".atlantisx" / "runtime.json"
+CAPABILITIES_PATH = ROOT / "config" / "capabilities.json"
+RUNTIME_PATH = ROOT / ".atlantisx" / "atlantisx.db"
+LEGACY_RUNTIME_PATH = ROOT / ".atlantisx" / "runtime.json"
 WEB_PATH = ROOT / "web"
 
 
@@ -81,11 +84,23 @@ class WorkforceEngine:
         "complete": 100,
     }
 
-    def __init__(self, config_path: Path = CONFIG_PATH, runtime_path: Path = RUNTIME_PATH) -> None:
+    def __init__(
+        self,
+        config_path: Path = CONFIG_PATH,
+        runtime_path: Path = RUNTIME_PATH,
+        capabilities_path: Path = CAPABILITIES_PATH,
+    ) -> None:
         self.config_path = Path(config_path)
+        self.capabilities_path = Path(capabilities_path)
         self.runtime_path = Path(runtime_path)
+        self.legacy_runtime_path = (
+            LEGACY_RUNTIME_PATH
+            if self.runtime_path == RUNTIME_PATH
+            else self.runtime_path.with_name("runtime.json")
+        )
         self._lock = threading.RLock()
         self._base = self._read_json(self.config_path)
+        self._capabilities = self._read_json(self.capabilities_path)
 
     @staticmethod
     def _read_json(path: Path) -> Dict[str, Any]:
@@ -96,27 +111,131 @@ class WorkforceEngine:
     def _empty_runtime() -> Dict[str, Any]:
         return {"tasks": [], "activities": [], "overrides": {}, "workflows": {}}
 
-    def _load_runtime(self) -> Dict[str, Any]:
-        if not self.runtime_path.exists():
-            return self._empty_runtime()
+    def _connect_runtime(self) -> sqlite3.Connection:
+        """Open the local SQLite store and apply the current transactional schema."""
+        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(str(self.runtime_path), timeout=10)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = FULL")
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 10000")
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS runtime_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS runtime_tasks (
+                id TEXT PRIMARY KEY,
+                position INTEGER NOT NULL,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS runtime_workflows (
+                task_id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS runtime_activities (
+                position INTEGER PRIMARY KEY,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS runtime_overrides (
+                task_id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL
+            );
+            """
+        )
+        connection.execute(
+            "INSERT OR IGNORE INTO runtime_metadata(key, value) VALUES('schema_version', '1')"
+        )
+        connection.commit()
+        return connection
+
+    def _migrate_legacy_runtime(self) -> None:
+        """Import the previous JSON state once without deleting the source backup."""
+        if self.runtime_path.exists() or not self.legacy_runtime_path.exists():
+            return
         try:
-            runtime = self._read_json(self.runtime_path)
+            runtime = self._read_json(self.legacy_runtime_path)
         except (OSError, json.JSONDecodeError):
-            return self._empty_runtime()
-        runtime.setdefault("tasks", [])
-        runtime.setdefault("activities", [])
-        runtime.setdefault("overrides", {})
-        runtime.setdefault("workflows", {})
+            return
+        for key, default in self._empty_runtime().items():
+            runtime.setdefault(key, copy.deepcopy(default))
+        self._save_runtime(runtime)
+        with self._connect_runtime() as connection:
+            connection.execute(
+                "INSERT OR REPLACE INTO runtime_metadata(key, value) VALUES('legacy_json_imported', ?)",
+                (self._now_iso(),),
+            )
+
+    def _load_runtime(self) -> Dict[str, Any]:
+        self._migrate_legacy_runtime()
+        runtime = self._empty_runtime()
+        try:
+            with self._connect_runtime() as connection:
+                runtime["tasks"] = [
+                    json.loads(row["payload"])
+                    for row in connection.execute(
+                        "SELECT payload FROM runtime_tasks ORDER BY position ASC"
+                    )
+                ]
+                runtime["activities"] = [
+                    json.loads(row["payload"])
+                    for row in connection.execute(
+                        "SELECT payload FROM runtime_activities ORDER BY position ASC"
+                    )
+                ]
+                runtime["workflows"] = {
+                    row["task_id"]: json.loads(row["payload"])
+                    for row in connection.execute("SELECT task_id, payload FROM runtime_workflows")
+                }
+                runtime["overrides"] = {
+                    row["task_id"]: json.loads(row["payload"])
+                    for row in connection.execute("SELECT task_id, payload FROM runtime_overrides")
+                }
+        except (sqlite3.DatabaseError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Atlantis-X runtime database failed its integrity read") from exc
         return runtime
 
     def _save_runtime(self, runtime: Dict[str, Any]) -> None:
-        self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.runtime_path.with_suffix(".tmp")
-        temporary.write_text(
-            json.dumps(runtime, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        temporary.replace(self.runtime_path)
+        """Persist a complete runtime snapshot in one SQLite transaction."""
+        with self._connect_runtime() as connection:
+            connection.execute("DELETE FROM runtime_tasks")
+            connection.execute("DELETE FROM runtime_workflows")
+            connection.execute("DELETE FROM runtime_activities")
+            connection.execute("DELETE FROM runtime_overrides")
+            connection.executemany(
+                "INSERT INTO runtime_tasks(id, position, payload) VALUES(?, ?, ?)",
+                [
+                    (task["id"], position, json.dumps(task, ensure_ascii=False))
+                    for position, task in enumerate(runtime.get("tasks", []))
+                ],
+            )
+            connection.executemany(
+                "INSERT INTO runtime_workflows(task_id, payload) VALUES(?, ?)",
+                [
+                    (task_id, json.dumps(workflow, ensure_ascii=False))
+                    for task_id, workflow in runtime.get("workflows", {}).items()
+                ],
+            )
+            connection.executemany(
+                "INSERT INTO runtime_activities(position, payload) VALUES(?, ?)",
+                [
+                    (position, json.dumps(activity, ensure_ascii=False))
+                    for position, activity in enumerate(runtime.get("activities", []))
+                ],
+            )
+            connection.executemany(
+                "INSERT INTO runtime_overrides(task_id, payload) VALUES(?, ?)",
+                [
+                    (task_id, json.dumps(fields, ensure_ascii=False))
+                    for task_id, fields in runtime.get("overrides", {}).items()
+                ],
+            )
+            connection.execute(
+                "INSERT OR REPLACE INTO runtime_metadata(key, value) VALUES('updated_at', ?)",
+                (self._now_iso(),),
+            )
 
     @staticmethod
     def _now_iso() -> str:
@@ -129,6 +248,7 @@ class WorkforceEngine:
     def get_state(self) -> Dict[str, Any]:
         with self._lock:
             state = copy.deepcopy(self._base)
+            state["capability_policy"] = copy.deepcopy(self._capabilities)
             runtime = self._load_runtime()
 
             for task in state.get("tasks", []):
@@ -201,8 +321,23 @@ class WorkforceEngine:
                 "generated_at": self._now_iso(),
                 "connected": True,
                 "engine": "online",
-                "version": "2.1-local",
+                "version": "2.2-local",
                 "execution_mode": "auditable_local_sandbox",
+                "storage": {
+                    "backend": "sqlite",
+                    "schema_version": 1,
+                    "encrypted": False,
+                    "boundary": "Local web runtime; native builds require SQLCipher vault encryption.",
+                },
+                "automation": {
+                    "external_enabled": self._capabilities["policy"]["external_automation_enabled"],
+                    "enabled_capabilities": sum(
+                        capability["state"] == "enabled"
+                        for capability in self._capabilities["capabilities"]
+                    ),
+                    "total_capabilities": len(self._capabilities["capabilities"]),
+                    "required_gates": self._capabilities["policy"]["required_gates"],
+                },
                 "queue": sum(workflow["state"] in {"ready", "running"} for workflow in workflows),
                 "waiting_approval": sum(workflow["state"] == "waiting_approval" for workflow in workflows),
                 "blocked": sum(workflow["state"] in {"blocked", "rejected"} for workflow in workflows),
@@ -715,7 +850,11 @@ class WorkforceEngine:
 class CommandCenterHandler(SimpleHTTPRequestHandler):
     """Serve the dashboard and the local workforce API."""
 
-    server_version = "AtlantisX/2.1"
+    server_version = "AtlantisX/2.2"
+    extensions_map = {
+        **SimpleHTTPRequestHandler.extensions_map,
+        ".webmanifest": "application/manifest+json",
+    }
 
     def __init__(
         self,
@@ -738,8 +877,9 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header(
             "Content-Security-Policy",
-            "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; "
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; "
+            "worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; "
             "frame-ancestors 'self' https://*.e2b.app https://arena.ai https://*.arena.ai",
         )
         self.send_header("Cache-Control", "no-store")
@@ -768,7 +908,7 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
             self._send_json({
                 "status": "ok",
                 "service": "atlantis-x-command-center",
-                "version": "2.1",
+                "version": "2.2",
                 "commander_auth_required": bool(self.commander_key),
             })
             return

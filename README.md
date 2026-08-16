@@ -1,33 +1,40 @@
 # Atlantis-X AI Command Center
 
-واجهة تشغيلية عربية لفريق **Atlantis-X AI Workforce v2.1**. يحوّل المشروع تصور «شركة AI داخل بيئة العمل» إلى مركز قيادة متكامل قابل للتشغيل، مع سلطة CEO واحدة، سجل موظفين موحّد، محرك دورات مستقل، صفوف عمل، بوابات أمن وقرار، وسجل تدقيق دائم.
+واجهة تشغيلية عربية لفريق **Atlantis-X AI Workforce v2.2**. يحوّل المشروع تصور «شركة AI داخل بيئة العمل» إلى مركز قيادة متكامل، مع سلطة CEO واحدة، سجل موظفين موحّد، محرك دورات مستقل، صفوف عمل، بوابات أمن وقرار، وسجل تدقيق دائم.
 
 ## ما تم بناؤه
 
 - لوحة قيادة RTL داكنة ومتجاوبة لحالة المشروع والمهام ومسارات العمل.
+- تطبيق PWA قابل للتثبيت بأيقونة مستقلة على Windows وAndroid وiPhone/iPad وmacOS وLinux.
 - 11 موظف AI بعقد تشغيلي كامل: هوية ومهمة ومهارات وذاكرة محددة النطاق وأدوات وصلاحيات وKPIs وصف حي وقنوات تواصل وتسلسل تقارير وتصعيد.
 - قناة CEO → Orion تنشئ توجيهًا وتوزعه ثم تشغّل المراحل المحلية الآمنة تلقائيًا.
-- Router حتمي وقابل للتدقيق يوزّع التوجيه على الوحدة المناسبة.
 - دورة حالات كاملة: `PLAN → EXECUTE → REVIEW → SECURITY → APPROVAL → RELEASE → COMPLETE`.
 - تشغيل مستقل افتراضيًا حتى الاكتمال أو حتى أقرب بوابة سيادية.
-- تشغيل يدوي لمرحلة واحدة أو للدورة كاملة من Runtime Console.
 - سجل Audit لكل انتقال وتغيير يدوي وقرار، مع المنفّذ والنتيجة والتوقيت.
 - نافذة قرار سيادي صريحة للموافقة أو الرفض مع ملاحظة تحفظ في السجل.
+- تخزين runtime انتقل من JSON إلى SQLite بمعاملات ذرية وWAL، مع استيراد تلقائي غير مدمر للحالة القديمة.
+- سجل قدرات `default-deny`: الأتمتة الخارجية متوقفة حتى تسجل موافقة صريحة وفحص صحة وخطة رجوع.
 - حماية اختيارية لكل Control API عبر `ATLANTISX_COMMANDER_KEY` ومفتاح Bearer محفوظ في جلسة المتصفح فقط.
-- مرحلة تنفيذ معزولة وRelease محلي؛ الآثار الخارجية متوقفة حتى تركيب موصل موثّق.
-- قرارات لوحة القيادة مرتبطة بمهام فعلية عند بوابة الموافقة، وليست أزرارًا تجميلية.
-- صفحات للفريق والمهام والمحرك والاستخبارات والأمن والتكاملات.
-- Executive Brief ديناميكي من الحالة الحالية.
-- مصدر حقيقة versioned في `config/workforce.json`.
-- خادم بلا تبعيات خارجية، Health Check، حاوية غير root، واختبارات للتوجيه والسياسات والمصادقة.
+- مصدر Tauri 2 أصلي لسطح المكتب والموبايل مع إعداد أولي يؤكد عبارة المرور مرتين، واجهة فتح/قفل خزنة SQLCipher، أهداف مشفّرة، ومفتاح مشتق بـArgon2 يُصفّر عند القفل؛ يحتاج toolchain وتوقيع المنصة لإنتاج الحزم النهائية.
 
-> حالة التكاملات معروضة بصدق: GitHub متاح كمستودع محلي فقط، أما Notion وAirtable وPostHog والنشر الخارجي فتبقى «بانتظار الربط» حتى تضبط بيانات الاعتماد الآمنة ويجتاز الموصل فحص الصحة.
+> حالة التكاملات معروضة بصدق: GitHub متاح كمستودع محلي فقط، أما موفرو AI وNotion وAirtable وPostHog والنشر والأتمتة الخارجية فتبقى غير مفعلة حتى تضبط بيانات الاعتماد الآمنة وتجتاز بوابات القدرة.
 
-## التشغيل المحلي
+## التثبيت للمستخدم — دون Docker أو Terminal
+
+1. افتح النسخة المستضافة عبر HTTPS في Edge أو Chrome أو Safari.
+2. اضغط **تثبيت التطبيق** في الشريط العلوي.
+3. على Windows وAndroid وافق على نافذة تثبيت المتصفح.
+4. على iPhone/iPad افتح Safari ثم **مشاركة ← إضافة إلى الشاشة الرئيسية ← إضافة**.
+
+سيظهر Atlantis-X بأيقونته كتطبيق مستقل. يحتوي المشروع على `manifest.webmanifest` وService Worker وأيقونات PWA/Apple/Windows. واجهة التطبيق ذاتية الموارد ولا تجلب خطوطًا أو سكربتات من طرف ثالث، ولا يتم تخزين استجابات `/api` داخل Cache الخاص بالـService Worker.
+
+هذه نسخة PWA حقيقية قابلة للتثبيت. أما ملفات `.exe` و`.msi` و`.apk` و`.aab` و`.ipa` فتتطلب بناءً وتوقيعًا على Windows/Android/macOS؛ لا يحتوي المستودع على تنزيلات وهمية غير موقعة. راجع [`docs/NATIVE_APP.md`](docs/NATIVE_APP.md).
+
+## تشغيل الخادم للمطور أو الاستضافة
 
 يتطلب Python 3.9 أو أحدث، ولا يحتاج إلى تثبيت حزم.
 
-### وضع تطوير محلي أحادي المستخدم
+### وضع محلي أحادي المستخدم
 
 ```bash
 python server.py --host 0.0.0.0 --port 4173
@@ -42,11 +49,11 @@ export ATLANTISX_COMMANDER_KEY="replace-with-a-long-random-secret"
 python server.py --host 0.0.0.0 --port 4173
 ```
 
-ثم افتح `http://localhost:4173`. ستعرض الواجهة نافذة تحقق وتحتفظ بالمفتاح في `sessionStorage` للجلسة الحالية فقط.
+ثم افتح `http://localhost:4173`. تحتفظ الواجهة بالمفتاح في `sessionStorage` للجلسة الحالية فقط.
 
-## التشغيل بالحاوية
+## تشغيل الخادم بالحاوية — اختياري
 
-يتطلب Compose ضبط المفتاح قبل التشغيل:
+لا يحتاج مستخدم التطبيق إلى Docker. يبقى Compose خيارًا لمشغّل الخادم فقط:
 
 ```bash
 export ATLANTISX_COMMANDER_KEY="replace-with-a-long-random-secret"
@@ -54,36 +61,41 @@ docker compose up --build
 ```
 
 - الخدمة تستمع على المنفذ `4173`.
-- الحالة تحفظ في volume باسم `atlantisx-state`.
+- SQLite تحفظ في volume باسم `atlantisx-state`.
 - العملية تعمل داخل الحاوية كمستخدم غير root.
-- `/api/health` مستخدم كـ Docker health check.
+- `/api/health` مستخدم كـDocker health check.
 
 ## الاختبارات والتحقق
 
 ```bash
 python -m unittest discover -s tests -v
-# أو بعد تثبيت pytest
-pytest
-
 node --check web/app.js
 python -m py_compile server.py
 python -m json.tool config/workforce.json >/dev/null
+python -m json.tool config/capabilities.json >/dev/null
+python -m json.tool src-tauri/tauri.conf.json >/dev/null
 ```
 
 ## الملفات الرئيسية
 
 ```text
 web/
-  index.html        واجهة مركز القيادة والنوافذ السيادية
-  styles.css        نظام التصميم المتجاوب
-  app.js            التفاعل والمصادقة والربط مع API
+  index.html                 واجهة مركز القيادة وتجربة التثبيت
+  styles.css                 نظام التصميم المتجاوب
+  app.js                     التفاعل والمصادقة وتثبيت PWA وجسر الخزنة الأصلية
+  manifest.webmanifest       تعريف التطبيق عبر المنصات
+  service-worker.js          App Shell؛ يستثني Control API
+  assets/icons/              أيقونات Windows وApple وPWA
 config/
-  workforce.json    سجل الموظفين والحالة الأساسية
-server.py           الخادم وCommand Router وPolicy Gate
-Dockerfile          صورة تشغيل غير root مع Health Check
-compose.yaml        تشغيل محمي وحفظ دائم للحالة
+  workforce.json             سجل الموظفين والحالة الأساسية
+  capabilities.json          سجل القدرات وبوابات التفعيل الثلاث
+src-tauri/
+  src/vault.rs               خزنة SQLCipher أصلية وArgon2
+  tauri.conf.json            حزم Windows/macOS/Linux/Android/iOS
+server.py                    الخادم والمحرك وSQLite وPolicy Gate
 docs/
   AI_WORKFORCE_ARCHITECTURE.md
+  NATIVE_APP.md
 tests/
   test_command_center.py
 ```
@@ -107,8 +119,10 @@ Authorization: Bearer <ATLANTISX_COMMANDER_KEY>
 
 ## حدود الأمان الحالية
 
-- يحفظ التشغيل في `.atlantisx/runtime.json`، وهو مستبعد من Git ويكتب ذريًا.
-- لا تحفظ مفاتيح API أو بيانات الاعتماد داخل الواجهة أو المستودع.
+- يحفظ خادم الويب runtime في `.atlantisx/atlantisx.db` باستخدام SQLite وWAL؛ الملف مستبعد من Git لكنه **غير مشفر**، لذلك لا يخزن أسرارًا.
+- خزنة التطبيق الأصلي في `src-tauri` تستخدم SQLCipher لتشفير قاعدة البيانات كاملة وArgon2 لاشتقاق المفتاح. لم تُبنَ الحزم الأصلية في هذه البيئة لغياب Rust وSDKs والتوقيع.
+- لا تحفظ مفاتيح API أو بيانات الاعتماد داخل الواجهة أو المستودع أو قاعدة Runtime غير المشفرة.
+- `config/capabilities.json` يبقي كل قدرة خارجية معطلة حتى تمر الموافقة وفحص الصحة وخطة الرجوع.
 - التنفيذ الحالي محلي وحتمي؛ لا يدّعي وجود LLM أو ماسح ثغرات أو موصل SaaS غير مهيأ.
 - `RELEASE` يسجل إصدارًا محليًا فقط، مع `external_effects_enabled: false`.
-- مفتاح القائد مناسب لحماية أولية أو شبكة خاصة. قبل نشر عام، ضع الخدمة خلف TLS وReverse Proxy موثوق، ويفضل موفر هوية/OIDC وصلاحيات متعددة المستخدمين.
+- قبل نشر عام، استخدم TLS وReverse Proxy موثوقًا وRate Limiting وهوية مركزية، ويفضل OIDC بدل المفتاح المشترك.

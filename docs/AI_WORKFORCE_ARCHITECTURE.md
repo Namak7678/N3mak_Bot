@@ -1,4 +1,4 @@
-# Atlantis-X AI Workforce v2
+# Atlantis-X AI Workforce v2.2
 
 ## Operating model
 
@@ -23,7 +23,7 @@ Orion — AI Chief of Staff / Orchestrator
 
 ## Shared truth
 
-`config/workforce.json` is the v2.1 workforce registry and the source of truth for every employee's identity, mission, skills, scoped memory contract, tools, permissions, KPIs, queue policy, communication channels, reporting line and escalation path. The local API combines that registry with runtime directives and derives each employee's live queue items, active count and Commander-waiting count.
+`config/workforce.json` is the v2.2 workforce registry and the source of truth for every employee's identity, mission, skills, scoped memory contract, tools, permissions, KPIs, queue policy, communication channels, reporting line and escalation path. The local API combines that registry with runtime directives and derives each employee's live queue items, active count and Commander-waiting count.
 
 The intended production knowledge core is:
 
@@ -34,7 +34,7 @@ The intended production knowledge core is:
 
 The Command Center never labels an external integration as connected unless its credentials and health check are confirmed. In v2, GitHub is reported as locally available; Notion, Airtable and PostHog remain pending.
 
-## Agent Runtime v2.1
+## Agent Runtime v2.2
 
 Every task owns a persisted workflow with seven explicit stages:
 
@@ -50,7 +50,7 @@ PLAN → EXECUTE → REVIEW → SECURITY → APPROVAL → RELEASE → COMPLETE
 - **RELEASE:** records a controlled local release. External adapters remain disabled in v2.
 - **COMPLETE:** Athena closes the cycle and makes it available to executive reporting.
 
-The runtime supports a single-step mode and an `until_gate` mode. CEO commands use `autorun: true` by default: Orion creates the task and the organization autonomously advances every safe local stage. A safe directive completes locally; a sovereign directive performs planning, isolated execution, independent review and security checks, then stops at `APPROVAL`. Every completed, waiting, approved, rejected or manual override transition creates an audit event with task, stage, employee, outcome and UTC timestamp. Workflow state is persisted atomically in `.atlantisx/runtime.json`.
+The runtime supports a single-step mode and an `until_gate` mode. CEO commands use `autorun: true` by default: Orion creates the task and the organization autonomously advances every safe local stage. A safe directive completes locally; a sovereign directive performs planning, isolated execution, independent review and security checks, then stops at `APPROVAL`. Every completed, waiting, approved, rejected or manual override transition creates an audit event with task, stage, employee, outcome and UTC timestamp. Workflow state is persisted transactionally in `.atlantisx/atlantisx.db` using SQLite, WAL and full synchronous durability. A previous `.atlantisx/runtime.json` is imported once without deleting the source backup.
 
 ## Command lifecycle
 
@@ -66,7 +66,7 @@ CEO directive
   → Athena closes and reports the cycle
 ```
 
-The v2.1 routing and workflow engine is deterministic and auditable. It does not pretend that an LLM, GitHub write adapter, vulnerability scanner, external SaaS or deployment target is connected.
+The v2.2 routing and workflow engine is deterministic and auditable. It does not pretend that an LLM, GitHub write adapter, vulnerability scanner, external SaaS or deployment target is connected.
 
 When `ATLANTISX_COMMANDER_KEY` is configured, it must be at least 16 characters and all control-plane routes require a constant-time checked Bearer key. The web client stores that key only in browser `sessionStorage`, can lock the session, and presents a non-dismissible authority gate after a `401`. Without the variable, the server remains available in explicitly labeled local single-user mode. This shared-key guard is not a replacement for TLS, OIDC or production multi-user authorization.
 
@@ -104,7 +104,23 @@ Agent prompts, tools or policies are never silently self-modified in production.
 - `POST /api/tasks/{id}/decision` — record a CEO approval/rejection and optional audit note.
 - `POST /api/tasks/{id}/status` — manually update and reconcile task/workflow state.
 
-All routes except health require `Authorization: Bearer ...` when `ATLANTISX_COMMANDER_KEY` is set. Runtime directives are stored under `.atlantisx/runtime.json`, which is intentionally ignored by Git.
+All routes except health require `Authorization: Bearer ...` when `ATLANTISX_COMMANDER_KEY` is set. Runtime directives are stored under `.atlantisx/atlantisx.db`, which is intentionally ignored by Git. This web-runtime SQLite database is not encrypted and must not contain credentials; the native Tauri vault uses SQLCipher and Argon2 instead.
+
+## Installable client and native vault
+
+The web client is a Progressive Web App with an application manifest, service worker and platform icons. It can be installed without a terminal on Windows, Android, iOS/iPadOS, macOS and Linux. The service worker caches only the application shell and explicitly bypasses `/api` responses.
+
+`src-tauri` provides the native Tauri 2 foundation. Its Rust vault uses SQLCipher full-database encryption and derives the key from a vault passphrase with Argon2. First run requires passphrase confirmation and states the no-recovery boundary before creating local storage. The key is retained only while the vault is unlocked and is zeroized when dropped. The encrypted schema covers goals, schedules, skills, capability grants and audit events. Native signed packages are not represented as available until each platform build and signing process actually succeeds.
+
+## Capability activation policy
+
+`config/capabilities.json` is a default-deny registry for desktop, browser, filesystem, Codework, Agent2Agent, provider and publishing capabilities. A native database constraint and the operating policy require all three gates before enablement:
+
+1. explicit Commander permission with a narrow scope;
+2. a successful adapter health check;
+3. a tested, scoped rollback plan.
+
+No external automation command is currently exposed. Adding credentials alone never enables a capability.
 
 ## Deployment boundary
 

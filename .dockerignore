@@ -8,4 +8,7 @@ __pycache__
 *.zip
 tests
 docs
+src-tauri
+node_modules
+package*.json
 README.md

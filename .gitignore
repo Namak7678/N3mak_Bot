@@ -10,6 +10,16 @@ __pycache__/
 .pytest_cache/
 .venv/
 
+# Native application build outputs
+node_modules/
+src-tauri/target/
+src-tauri/gen/schemas/
+*.msi
+*.msix
+*.apk
+*.aab
+*.ipa
+
 # Editors / OS
 .vscode/
 .DS_Store

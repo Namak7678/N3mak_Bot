@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -16,7 +17,7 @@ class WorkforceEngineTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         self.engine = WorkforceEngine(
             config_path=root / "config" / "workforce.json",
-            runtime_path=Path(self.temp_dir.name) / "runtime.json",
+            runtime_path=Path(self.temp_dir.name) / "atlantisx.db",
         )
 
     def test_routes_security_directive_to_sentinel(self):
@@ -36,8 +37,35 @@ class WorkforceEngineTests(unittest.TestCase):
         state = self.engine.get_state()
         self.assertEqual(state["tasks"][0]["id"], created["task"]["id"])
         self.assertTrue(self.engine.runtime_path.exists())
-        saved = json.loads(self.engine.runtime_path.read_text(encoding="utf-8"))
-        self.assertEqual(len(saved["tasks"]), 1)
+        with sqlite3.connect(self.engine.runtime_path) as connection:
+            saved_count = connection.execute("SELECT COUNT(*) FROM runtime_tasks").fetchone()[0]
+            journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+        self.assertEqual(saved_count, 1)
+        self.assertEqual(journal_mode, "wal")
+
+    def test_legacy_json_runtime_is_imported_into_sqlite_once(self):
+        migration_dir = Path(self.temp_dir.name) / "migration"
+        migration_dir.mkdir()
+        legacy = migration_dir / "runtime.json"
+        legacy.write_text(json.dumps({
+            "tasks": [{
+                "id": "AX-999", "title": "مهمة قديمة", "owner": "atlas",
+                "status": "queued", "priority": "low", "progress": 0,
+            }],
+            "activities": [], "overrides": {}, "workflows": {},
+        }, ensure_ascii=False), encoding="utf-8")
+        migrated = WorkforceEngine(
+            config_path=self.engine.config_path,
+            runtime_path=migration_dir / "atlantisx.db",
+        )
+        state = migrated.get_state()
+        self.assertEqual(state["tasks"][0]["id"], "AX-999")
+        with sqlite3.connect(migrated.runtime_path) as connection:
+            marker = connection.execute(
+                "SELECT value FROM runtime_metadata WHERE key='legacy_json_imported'"
+            ).fetchone()
+        self.assertIsNotNone(marker)
+        self.assertTrue(legacy.exists())
 
     def test_dispatch_autonomously_completes_safe_local_work(self):
         result = self.engine.dispatch_command("جهّز تقرير سوق أسبوعي")
@@ -71,6 +99,34 @@ class WorkforceEngineTests(unittest.TestCase):
             self.assertFalse(required.difference(agent), agent["id"])
             self.assertIn("items", agent["queue"])
             self.assertEqual(agent["queue"]["depth"], len(agent["queue"]["items"]))
+
+    def test_external_capabilities_remain_disabled_until_all_gates_pass(self):
+        state = self.engine.get_state()
+        policy = state["capability_policy"]
+        self.assertFalse(policy["policy"]["external_automation_enabled"])
+        self.assertEqual(len(policy["policy"]["required_gates"]), 3)
+        for capability in policy["capabilities"]:
+            self.assertEqual(capability["state"], "disabled")
+            self.assertFalse(capability["permission"]["granted"])
+            self.assertEqual(capability["health"]["status"], "unverified")
+            self.assertEqual(capability["rollback"]["status"], "missing")
+        self.assertEqual(state["runtime"]["automation"]["enabled_capabilities"], 0)
+
+    def test_native_vault_is_wired_without_external_permissions(self):
+        root = Path(__file__).resolve().parents[1]
+        capability = json.loads((root / "src-tauri" / "capabilities" / "default.json").read_text())
+        self.assertEqual(capability["permissions"], ["core:default"])
+        self.assertEqual(capability["windows"], ["main"])
+
+        native_source = (root / "src-tauri" / "src" / "vault.rs").read_text()
+        frontend = (root / "web" / "app.js").read_text()
+        self.assertIn("bundled-sqlcipher-vendored-openssl", (root / "src-tauri" / "Cargo.toml").read_text())
+        self.assertIn("permission_granted = 1 AND health_verified = 1 AND rollback_ready = 1", native_source)
+        self.assertIn('nativeInvoke("unlock_vault"', frontend)
+        self.assertIn('nativeInvoke("create_goal"', frontend)
+        self.assertIn('nativeInvoke("lock_vault"', frontend)
+        self.assertIn("pub initialized: bool", native_source)
+        self.assertIn("vault-passphrase-confirm", (root / "web" / "index.html").read_text())
 
     def test_task_status_update_is_auditable(self):
         created = self.engine.create_command("جهّز حملة تسويق جديدة")
@@ -140,6 +196,13 @@ class WorkforceEngineTests(unittest.TestCase):
             with urlopen(base_url + "/api/health", timeout=3) as response:
                 health = json.load(response)
             self.assertTrue(health["commander_auth_required"])
+
+            with urlopen(base_url + "/manifest.webmanifest", timeout=3) as response:
+                manifest = json.load(response)
+                manifest_type = response.headers.get_content_type()
+            self.assertEqual(manifest["short_name"], "Atlantis-X")
+            self.assertEqual(manifest_type, "application/manifest+json")
+            self.assertTrue(any(icon["sizes"] == "512x512" for icon in manifest["icons"]))
 
             with self.assertRaises(HTTPError) as context:
                 urlopen(base_url + "/api/state", timeout=3)

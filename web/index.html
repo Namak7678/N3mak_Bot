@@ -3,9 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#070b11">
-  <meta name="description" content="Atlantis-X AI Workforce Command Center">
+  <meta name="theme-color" content="#071019">
+  <meta name="description" content="Atlantis-X personal AI agent and multi-agent Command Center">
+  <meta name="application-name" content="Atlantis-X">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Atlantis-X">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Atlantis-X · AI Command Center</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/assets/icons/icon-64.png" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -31,6 +39,9 @@
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2"/></symbol>
+    <symbol id="i-device" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="i-device-download" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4M12 6v7M9 10l3 3 3-3"/></symbol>
   </svg>
 
   <div class="app-loading" id="app-loading">
@@ -81,6 +92,8 @@
       </div>
       <div class="topbar-actions">
         <div class="system-live"><i></i><span>النظام تشغيلي</span><small>OPERATIONAL</small></div>
+        <button class="install-app-button" id="install-app" type="button"><svg><use href="#i-device-download"/></svg><span>تثبيت التطبيق</span></button>
+        <button class="vault-control" id="vault-control" type="button" hidden><svg><use href="#i-lock"/></svg><span id="vault-control-label">الخزنة مقفلة</span><i></i></button>
         <button class="authority-control" id="authority-control" type="button" aria-label="حالة جلسة القائد"><svg><use href="#i-lock"/></svg><span id="authority-label">LOCAL</span></button>
         <span class="top-date" id="current-date">الأحد، 16 أغسطس</span>
         <button class="icon-button" id="global-search" aria-label="البحث"><svg><use href="#i-search"/></svg><kbd>⌘ K</kbd></button>
@@ -174,7 +187,7 @@
 
       <section class="view" id="view-runtime" data-view-section="runtime">
         <div class="page-lead runtime-lead">
-          <div><span class="section-kicker">AGENT RUNTIME v2.1 · LOCAL SANDBOX</span><h1>محرك الوكلاء</h1><p>دورة تنفيذ فعلية للحالة والصفوف وبوابات القرار، مع سجل تدقيق لكل انتقال ودون السماح بأثر خارجي غير موثّق.</p></div>
+          <div><span class="section-kicker">AGENT RUNTIME v2.2 · SQLITE CORE</span><h1>محرك الوكلاء</h1><p>دورة تنفيذ فعلية للحالة والصفوف وبوابات القرار، مع سجل تدقيق لكل انتقال ودون السماح بأثر خارجي غير موثّق.</p></div>
           <div class="runtime-online"><span class="runtime-orb"><i></i></span><div><strong>المحرك متصل</strong><small>AUDITABLE LOCAL EXECUTION</small></div></div>
         </div>
 
@@ -205,7 +218,7 @@
           </article>
         </div>
 
-        <div class="runtime-boundary panel"><svg><use href="#i-shield"/></svg><div><strong>حدود التنفيذ الحالية</strong><p>المحرك يدير الحالة والتوزيع والمراجعة والأمن فعليًا داخل البيئة المحلية. مرحلة RELEASE تسجل إصدارًا محليًا فقط؛ GitHub وNotion والنشر الخارجي ستحتاج موصلات وصلاحيات منفصلة.</p></div><span>NO EXTERNAL SIDE EFFECTS</span></div>
+        <div class="runtime-boundary panel"><svg><use href="#i-shield"/></svg><div><strong>حدود التنفيذ الحالية</strong><p>المحرك يحفظ الحالة في SQLite محلي ويشغّل الدورة داخل sandbox. مرحلة RELEASE محلية فقط؛ أي أتمتة خارجية تبقى معطلة حتى موافقة محددة وفحص صحة وخطة رجوع.</p></div><span>NO EXTERNAL SIDE EFFECTS</span></div>
       </section>
 
       <section class="view" id="view-intelligence" data-view-section="intelligence">
@@ -302,6 +315,50 @@
   <dialog class="app-dialog" id="command-dialog">
     <button class="dialog-close" data-close-dialog aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
     <div id="command-result"></div>
+  </dialog>
+
+  <dialog class="app-dialog install-dialog" id="install-dialog">
+    <button class="dialog-close" data-close-install aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <div class="install-hero">
+      <img src="/assets/icons/icon-192.png" width="96" height="96" alt="أيقونة Atlantis-X">
+      <div><span class="section-kicker">INSTALL ATLANTIS-X</span><h2>ثبّت وكيلك على هذا الجهاز</h2><p>يعمل كتطبيق مستقل من الشاشة الرئيسية دون Docker أو أوامر طرفية.</p></div>
+    </div>
+    <div class="install-device-state"><svg><use href="#i-device"/></svg><div><small>الجهاز الحالي</small><strong id="install-platform">جارٍ التعرّف…</strong></div><i id="install-ready-dot"></i></div>
+    <button class="dialog-action install-primary" id="install-primary" type="button"><svg><use href="#i-device-download"/></svg><span>تثبيت Atlantis-X</span></button>
+    <p class="install-help" id="install-help"></p>
+    <div class="platform-install-grid">
+      <article data-platform-card="windows"><b>Windows</b><span>Edge أو Chrome</span><small>تطبيق PWA مستقل مع أيقونة في Start وسطح المكتب.</small></article>
+      <article data-platform-card="android"><b>Android</b><span>Chrome</span><small>تثبيت مباشر على الشاشة الرئيسية كتطبيق مستقل.</small></article>
+      <article data-platform-card="ios"><b>iPhone / iPad</b><span>Safari</span><small>مشاركة ← إضافة إلى الشاشة الرئيسية.</small></article>
+    </div>
+    <div class="native-boundary"><svg><use href="#i-shield"/></svg><p><b>حدود النسخة الحالية</b><span>نسخة PWA قابلة للتثبيت الآن. ملفات Windows EXE وAndroid APK وiOS IPA الأصلية تحتاج بناءً وتوقيعًا موثوقًا لكل منصة؛ لن نعرض ملفًا وهميًا غير موقّع.</span></p></div>
+    <a class="icon-download-link" href="/assets/icons/atlantis-x.ico" download="Atlantis-X.ico"><svg><use href="#i-download"/></svg>تحميل أيقونة Windows</a>
+  </dialog>
+
+  <dialog class="app-dialog vault-dialog" id="vault-dialog">
+    <button class="dialog-close" data-close-vault aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <div class="vault-dialog-head">
+      <div class="authority-mark"><svg><use href="#i-lock"/></svg><i></i></div>
+      <div><span class="section-kicker">NATIVE SQLCIPHER VAULT</span><h2>الخزنة المحلية المشفّرة</h2></div>
+    </div>
+    <div class="vault-status-card" id="vault-status-card">
+      <i></i><div><strong id="vault-status-title">الخزنة مقفلة</strong><span id="vault-status-copy">الأهداف والبيانات الأصلية لا تتاح قبل فتح الخزنة.</span></div><b id="vault-backend">SQLCIPHER</b>
+    </div>
+    <form id="vault-unlock-form">
+      <label for="vault-passphrase">عبارة مرور الخزنة <small>12 حرفًا على الأقل</small></label>
+      <input id="vault-passphrase" name="vault-passphrase" type="password" minlength="12" required autocomplete="current-password" placeholder="••••••••••••">
+      <div class="vault-confirm-field" id="vault-confirm-field" hidden>
+        <label for="vault-passphrase-confirm">تأكيد عبارة المرور <small>لحمايتك من خطأ الكتابة</small></label>
+        <input id="vault-passphrase-confirm" name="vault-passphrase-confirm" type="password" minlength="12" autocomplete="new-password" placeholder="••••••••••••">
+      </div>
+      <p class="vault-warning"><svg><use href="#i-shield"/></svg><span>لا تُرسل العبارة إلى خادم الويب ولا تُحفظ في المتصفح. لا توجد آلية استرداد إذا فُقدت.</span></p>
+      <small class="form-message" id="vault-message" role="alert"></small>
+      <button class="dialog-action" id="vault-unlock-submit" type="submit">فتح الخزنة المشفّرة</button>
+    </form>
+    <div class="vault-open-actions" id="vault-open-actions" hidden>
+      <div><strong id="vault-goal-count">0 أهداف مشفّرة</strong><span>تبقى البيانات داخل مساحة التطبيق الأصلية.</span></div>
+      <button type="button" id="vault-lock-button"><svg><use href="#i-lock"/></svg>قفل الخزنة الآن</button>
+    </div>
   </dialog>
 
   <dialog class="app-dialog authority-dialog" id="authority-dialog">

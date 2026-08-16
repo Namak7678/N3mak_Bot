@@ -8,6 +8,9 @@ const AX = {
   feedPaused: false,
   commanderKey: "",
   pendingDecision: null,
+  installPrompt: null,
+  nativeRuntime: false,
+  vaultStatus: null,
   colors: {
     orion: { hex: "#42e8ca", rgb: "66,232,202" },
     athena: { hex: "#68c9f0", rgb: "104,201,240" },
@@ -83,6 +86,117 @@ function storeCommanderKey(value) {
     if (value) sessionStorage.setItem("atlantisx.commanderKey", value);
     else sessionStorage.removeItem("atlantisx.commanderKey");
   } catch (_) { /* Session-only in-memory fallback remains available. */ }
+}
+
+function nativeInvoke(command, args = {}) {
+  const invoke = window.__TAURI__?.core?.invoke;
+  if (typeof invoke !== "function") return Promise.reject(new Error("Native IPC is unavailable"));
+  return invoke(command, args);
+}
+
+async function initializeNativeVault() {
+  if (typeof window.__TAURI__?.core?.invoke !== "function") return;
+  AX.nativeRuntime = true;
+  document.body.classList.add("native-runtime");
+  $("#vault-control").hidden = false;
+  $(".system-live span").textContent = "الخزنة الأصلية";
+  $(".system-live small").textContent = "NATIVE CORE";
+  try {
+    AX.vaultStatus = await nativeInvoke("vault_status");
+    await renderNativeVault();
+    if (!AX.vaultStatus.unlocked) setTimeout(openNativeVault, 120);
+  } catch (error) {
+    $("#vault-message").textContent = String(error);
+    toast("تعذر تهيئة الخزنة الأصلية.", "error");
+  }
+}
+
+async function renderNativeVault() {
+  if (!AX.nativeRuntime || !AX.vaultStatus) return;
+  const unlocked = AX.vaultStatus.unlocked;
+  const control = $("#vault-control");
+  const status = $("#vault-status-card");
+  control.classList.toggle("unlocked", unlocked);
+  status.classList.toggle("unlocked", unlocked);
+  $("#vault-control-label").textContent = unlocked ? "الخزنة مفتوحة" : "الخزنة مقفلة";
+  const initialized = Boolean(AX.vaultStatus.initialized);
+  $("#vault-status-title").textContent = unlocked
+    ? "الخزنة مفتوحة لهذه الجلسة"
+    : initialized ? "الخزنة مقفلة" : "أنشئ خزنتك المحلية";
+  $("#vault-status-copy").textContent = unlocked
+    ? "SQLCipher نشط. يزول المفتاح من الذاكرة عند القفل أو إغلاق التطبيق."
+    : initialized
+      ? "أدخل عبارتك لفتح الأهداف المشفّرة الموجودة على هذا الجهاز."
+      : "اختر عبارة قوية. ستُنشأ خزنة SQLCipher جديدة على هذا الجهاز فقط.";
+  $("#vault-backend").textContent = `${AX.vaultStatus.backend || "sqlcipher"} · SCHEMA ${AX.vaultStatus.schema_version}`.toUpperCase();
+  $("#vault-unlock-form").hidden = unlocked;
+  $("#vault-open-actions").hidden = !unlocked;
+  $("#vault-confirm-field").hidden = initialized || unlocked;
+  $("#vault-passphrase-confirm").required = !initialized && !unlocked;
+  $("#vault-passphrase").autocomplete = initialized ? "current-password" : "new-password";
+  $("#vault-unlock-submit").textContent = initialized ? "فتح الخزنة المشفّرة" : "إنشاء الخزنة المشفّرة";
+  if (unlocked) {
+    try {
+      const goals = await nativeInvoke("list_goals");
+      $("#vault-goal-count").textContent = `${goals.length} أهداف مشفّرة`;
+    } catch (error) {
+      $("#vault-message").textContent = String(error);
+    }
+  }
+}
+
+function openNativeVault() {
+  if (!AX.nativeRuntime) return;
+  $("#vault-message").textContent = "";
+  renderNativeVault();
+  const dialog = $("#vault-dialog");
+  if (!dialog.open) dialog.showModal();
+  if (!AX.vaultStatus?.unlocked) setTimeout(() => $("#vault-passphrase").focus(), 80);
+}
+
+function closeNativeVault() {
+  $("#vault-passphrase").value = "";
+  $("#vault-passphrase-confirm").value = "";
+  $("#vault-message").textContent = "";
+  $("#vault-dialog").close();
+}
+
+async function unlockNativeVault(passphrase) {
+  const submit = $("#vault-unlock-submit");
+  submit.disabled = true;
+  submit.textContent = "جارٍ اشتقاق مفتاح الخزنة…";
+  $("#vault-message").textContent = "";
+  try {
+    AX.vaultStatus = await nativeInvoke("unlock_vault", { passphrase });
+    $("#vault-passphrase").value = "";
+    await renderNativeVault();
+    toast("فُتحت خزنة SQLCipher لهذه الجلسة فقط.");
+  } catch (error) {
+    AX.vaultStatus = await nativeInvoke("vault_status").catch(() => ({
+      unlocked: false,
+      initialized: Boolean(AX.vaultStatus?.initialized),
+      backend: "sqlcipher",
+      schema_version: 1
+    }));
+    await renderNativeVault();
+    $("#vault-message").textContent = String(error);
+  } finally {
+    $("#vault-passphrase").value = "";
+    $("#vault-passphrase-confirm").value = "";
+    passphrase = "";
+    submit.disabled = false;
+    submit.textContent = AX.vaultStatus?.initialized ? "فتح الخزنة المشفّرة" : "إنشاء الخزنة المشفّرة";
+  }
+}
+
+async function lockNativeVault() {
+  try {
+    AX.vaultStatus = await nativeInvoke("lock_vault");
+    await renderNativeVault();
+    toast("قُفلت الخزنة وأُزيل مفتاحها من الذاكرة.");
+  } catch (error) {
+    toast(String(error), "error");
+  }
 }
 
 async function api(path, options = {}) {
@@ -534,6 +648,18 @@ async function submitCommand(command) {
   submit.disabled = true;
   submit.querySelector("span").textContent = "Orion يحلّل…";
   try {
+    if (AX.nativeRuntime) {
+      if (!AX.vaultStatus?.unlocked) {
+        openNativeVault();
+        throw new Error("افتح الخزنة المشفّرة أولًا لحفظ الهدف الأصلي.");
+      }
+      const goal = await nativeInvoke("create_goal", { title: command });
+      $("#command-input").value = "";
+      autoGrow($("#command-input"));
+      await renderNativeVault();
+      toast(`حُفظ الهدف ${goal.id.slice(0, 8)} داخل خزنة SQLCipher.`);
+      return;
+    }
     const result = await api("/api/commands", { method: "POST", body: JSON.stringify({ command }) });
     await loadState();
     showCommandResult(result);
@@ -588,6 +714,96 @@ function toast(message, type = "success") {
   setTimeout(() => element.remove(), 3650);
 }
 
+function currentPlatform() {
+  const ua = navigator.userAgent || "";
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (ios) return { id: "ios", label: "iPhone / iPad", browser: "Safari" };
+  if (/Android/i.test(ua)) return { id: "android", label: "Android", browser: "Chrome" };
+  if (/Windows/i.test(ua)) return { id: "windows", label: "Windows", browser: "Edge أو Chrome" };
+  if (/Mac/i.test(ua)) return { id: "macos", label: "macOS", browser: "Safari أو Chrome" };
+  if (/Linux/i.test(ua)) return { id: "linux", label: "Linux", browser: "Chrome أو Chromium" };
+  return { id: "web", label: "هذا الجهاز", browser: "متصفح حديث" };
+}
+
+function isStandaloneApp() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function renderInstallState() {
+  const platform = currentPlatform();
+  const installed = isStandaloneApp();
+  $("#install-platform").textContent = `${platform.label} · ${platform.browser}`;
+  $$("[data-platform-card]").forEach(card => card.classList.toggle("active", card.dataset.platformCard === platform.id));
+  const primary = $("#install-primary");
+  const help = $("#install-help");
+  $("#install-ready-dot").classList.toggle("ready", installed || Boolean(AX.installPrompt));
+
+  if (installed) {
+    primary.disabled = true;
+    primary.querySelector("span").textContent = "Atlantis-X مثبت على هذا الجهاز";
+    help.textContent = "افتح التطبيق لاحقًا من الشاشة الرئيسية أو قائمة Start.";
+  } else if (AX.installPrompt) {
+    primary.disabled = false;
+    primary.querySelector("span").textContent = `تثبيت على ${platform.label}`;
+    help.textContent = "سيطلب المتصفح تأكيدًا واحدًا ثم يضيف التطبيق والأيقونة تلقائيًا.";
+  } else if (platform.id === "ios") {
+    primary.disabled = false;
+    primary.querySelector("span").textContent = "عرض خطوات iPhone / iPad";
+    help.textContent = "في Safari اضغط زر المشاركة، ثم «إضافة إلى الشاشة الرئيسية»، ثم «إضافة».";
+  } else {
+    primary.disabled = false;
+    primary.querySelector("span").textContent = "عرض طريقة التثبيت";
+    help.textContent = "افتح قائمة المتصفح واختر «تثبيت Atlantis-X» أو «إضافة إلى الشاشة الرئيسية».";
+  }
+}
+
+function openInstallDialog() {
+  renderInstallState();
+  const dialog = $("#install-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+async function installApplication() {
+  const platform = currentPlatform();
+  if (isStandaloneApp()) return;
+  if (!AX.installPrompt) {
+    renderInstallState();
+    toast(platform.id === "ios"
+      ? "Safari: مشاركة ← إضافة إلى الشاشة الرئيسية ← إضافة."
+      : "من قائمة المتصفح اختر تثبيت Atlantis-X أو إضافة إلى الشاشة الرئيسية.");
+    return;
+  }
+  AX.installPrompt.prompt();
+  const choice = await AX.installPrompt.userChoice;
+  if (choice.outcome === "accepted") {
+    toast("تم قبول تثبيت Atlantis-X على جهازك.");
+    AX.installPrompt = null;
+  }
+  renderInstallState();
+}
+
+function setupInstallExperience() {
+  if (AX.nativeRuntime) return;
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    AX.installPrompt = event;
+    $("#install-app")?.classList.add("ready");
+    renderInstallState();
+  });
+  window.addEventListener("appinstalled", () => {
+    AX.installPrompt = null;
+    $("#install-app")?.classList.add("installed");
+    renderInstallState();
+    toast("اكتمل تثبيت Atlantis-X. يمكنك فتحه من أيقونة الجهاز.");
+  });
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js").catch(error => {
+      console.warn("Atlantis-X service worker registration failed", error);
+    });
+  }
+  if (isStandaloneApp()) $("#install-app")?.classList.add("installed");
+}
+
 function autoGrow(textarea) {
   textarea.style.height = "auto";
   textarea.style.height = `${Math.min(textarea.scrollHeight, 72)}px`;
@@ -619,6 +835,8 @@ function bindEvents() {
     if (runtimeDecision) openSovereignDecision(runtimeDecision.dataset.taskId, runtimeDecision.dataset.runtimeDecision);
 
     if (event.target.closest("[data-close-sovereign]")) closeSovereignDecision();
+    if (event.target.closest("[data-close-install]")) $("#install-dialog")?.close();
+    if (event.target.closest("[data-close-vault]")) closeNativeVault();
     if (event.target.closest("[data-close-dialog]")) event.target.closest("dialog")?.close();
 
     const integration = event.target.closest("[data-integration]");
@@ -661,6 +879,16 @@ function bindEvents() {
     event.preventDefault();
     authorizeCommander($("#authority-key").value.trim());
   });
+  $("#vault-unlock-form").addEventListener("submit", event => {
+    event.preventDefault();
+    const passphrase = $("#vault-passphrase").value;
+    if (!AX.vaultStatus?.initialized && passphrase !== $("#vault-passphrase-confirm").value) {
+      $("#vault-message").textContent = "عبارتا المرور غير متطابقتين. لم تُنشأ الخزنة.";
+      $("#vault-passphrase-confirm").focus();
+      return;
+    }
+    unlockNativeVault(passphrase);
+  });
   $("#sovereign-form").addEventListener("submit", event => {
     event.preventDefault();
     if (!AX.pendingDecision) return;
@@ -693,6 +921,10 @@ function bindEvents() {
     if (!AX.feedPaused) renderFeed();
   });
   $("#brief-button").addEventListener("click", showBrief);
+  $("#install-app").addEventListener("click", openInstallDialog);
+  $("#install-primary").addEventListener("click", installApplication);
+  $("#vault-control").addEventListener("click", openNativeVault);
+  $("#vault-lock-button").addEventListener("click", lockNativeVault);
   $("#org-chart-button").addEventListener("click", () => $("#org-dialog").showModal());
   $("#global-search").addEventListener("click", focusCommand);
   $("#authority-control").addEventListener("click", handleAuthorityControl);
@@ -706,9 +938,14 @@ function bindEvents() {
     event.preventDefault();
     closeSovereignDecision();
   });
+  $("#vault-dialog").addEventListener("cancel", event => {
+    event.preventDefault();
+    closeNativeVault();
+  });
   $$("dialog").forEach(dialog => dialog.addEventListener("click", event => {
     if (event.target !== dialog || dialog.id === "authority-dialog") return;
     if (dialog.id === "sovereign-dialog") closeSovereignDecision();
+    else if (dialog.id === "vault-dialog") closeNativeVault();
     else dialog.close();
   }));
 }
@@ -720,6 +957,8 @@ function focusCommand() {
 
 async function init() {
   bindEvents();
+  await initializeNativeVault();
+  setupInstallExperience();
   storeCommanderKey(readCommanderKey());
   const initialHash = location.hash.replace("#", "");
   try {
@@ -727,7 +966,9 @@ async function init() {
     if (initialHash) setView(initialHash);
   } catch (error) {
     console.error(error);
-    if (error.status !== 401) toast("تعذر تحميل Knowledge Core المحلي. شغّل server.py ثم أعد المحاولة.", "error");
+    if (error.status !== 401) toast(AX.nativeRuntime
+      ? "الخزنة الأصلية جاهزة، لكن محرك الفريق الكامل لم يُحمّل في هذه الحزمة."
+      : "تعذر تحميل Knowledge Core المحلي. شغّل server.py ثم أعد المحاولة.", "error");
   } finally {
     setTimeout(() => document.body.classList.add("ready"), 350);
   }

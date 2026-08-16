@@ -23,16 +23,27 @@ def plan_payload(risk="low", requires_approval=False):
         "risk_level": risk,
         "requires_approval": requires_approval,
         "assumptions": ["The product goal is still in discovery."],
+        "success_metrics": ["The design passes its documented acceptance checks."],
         "delegations": [
             {
                 "owner": "forge",
                 "action": "Create the technical delivery design.",
+                "rationale": "Forge owns implementation architecture.",
+                "deliverable": "A versioned technical design.",
                 "acceptance": "The design includes interfaces, tests, and rollback criteria.",
+                "dependencies": ["Approved product scope"],
+                "estimated_effort": "2 engineering days",
+                "requires_approval": False,
             },
             {
                 "owner": "sentinel",
                 "action": "Review the proposed trust boundaries.",
+                "rationale": "An independent security review limits release risk.",
+                "deliverable": "A trust-boundary review report.",
                 "acceptance": "High-risk paths are identified before release.",
+                "dependencies": ["Technical design"],
+                "estimated_effort": "4 hours",
+                "requires_approval": False,
             },
         ],
         "next_action": "Confirm the first delivery milestone.",
@@ -96,6 +107,9 @@ class CtoAgentTests(unittest.TestCase):
         self.assertIn('api("/api/cto/connect"', frontend)
         self.assertIn('api("/api/cto/disconnect"', frontend)
         self.assertIn('"/api/cto/run"', frontend)
+        self.assertIn("downloadCtoBrief", frontend)
+        self.assertIn("ORDERED INTERNAL EXECUTION PLAN", frontend)
+        self.assertIn("SUCCESS METRICS", frontend)
         self.assertIn('"/cto.css"', service_worker)
 
     def test_orion_is_the_only_user_facing_cto_identity(self):
@@ -159,6 +173,52 @@ class CtoAgentTests(unittest.TestCase):
                         self.assertEqual(request["body"]["max_tokens"], 1600)
                         self.assertEqual(request["body"]["temperature"], 0.2)
                         self.assertNotIn("max_completion_tokens", request["body"])
+
+    def test_enriched_plan_supports_every_specialist_role(self):
+        specialist_roles = ("meridian", "nautilus", "aegis", "nova")
+        payload = plan_payload()
+        payload["success_metrics"] = ["metric {}".format(index) for index in range(9)]
+        payload["delegations"] = [
+            {
+                "owner": owner,
+                "action": "Complete {} analysis.".format(owner),
+                "rationale": "This specialist owns the relevant domain.",
+                "deliverable": "A {} decision brief.".format(owner),
+                "acceptance": "The brief has evidence and a recommendation.",
+                "dependencies": ["Commander goal", "Validated inputs"],
+                "estimated_effort": "One workday",
+                "requires_approval": owner == "aegis",
+            }
+            for owner in specialist_roles
+        ]
+        plan = CtoAgent._normalize_plan(payload, "Build a cross-domain strategy")
+        self.assertEqual([item["owner"] for item in plan["delegations"]], list(specialist_roles))
+        self.assertEqual(len(plan["success_metrics"]), 6)
+        self.assertEqual(plan["delegations"][0]["deliverable"], "A meridian decision brief.")
+        self.assertEqual(plan["delegations"][0]["dependencies"], ["Commander goal", "Validated inputs"])
+        self.assertTrue(plan["requires_approval"])
+
+    def test_recent_cto_context_is_bounded_redacted_and_reported(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            transport = RecordingTransport("openai_compatible")
+            agent = CtoAgent(CATALOG, transport=transport)
+            engine = WorkforceEngine(
+                config_path=ROOT / "config" / "workforce.json",
+                runtime_path=Path(temp_dir) / "runtime.db",
+                cto_agent=agent,
+            )
+            agent.connect("openai", "https://api.openai.com/v1", "gpt-4.1-mini", "key", True, True)
+            first = engine.run_cto_goal("Plan release with api_key=top-secret-value")
+            second = engine.run_cto_goal("Continue the release plan with measurable gates")
+
+            prompt = transport.calls[-1]["body"]["messages"][0]["content"]
+            self.assertIn("recent_cto_memory", prompt)
+            self.assertIn("[REDACTED]", prompt)
+            self.assertNotIn("top-secret-value", prompt)
+            self.assertNotIn(plan_payload()["answer"], prompt)
+            self.assertEqual(first["cto_plan"]["continuity"]["items_used"], 0)
+            self.assertEqual(second["cto_plan"]["continuity"]["items_used"], 1)
+            self.assertEqual(second["cto_plan"]["continuity"]["authority"], "context_only")
 
     def test_credential_is_session_only_sanitized_and_forgotten(self):
         transport = RecordingTransport("openai_compatible")
@@ -349,6 +409,31 @@ class CtoHttpRouteTests(unittest.TestCase):
         )
         with urlopen(request, timeout=3) as response:
             return response.status, json.load(response)
+
+    def get(self, path, authorized=True):
+        headers = {}
+        if authorized:
+            headers["Authorization"] = "Bearer unit-test-commander"
+        request = Request(self.base_url + path, headers=headers)
+        with urlopen(request, timeout=3) as response:
+            return response.status, json.load(response)
+
+    def test_readiness_is_commander_protected_and_distinguishes_optional_provider(self):
+        with self.assertRaises(HTTPError) as unauthorized:
+            self.get("/api/readiness", authorized=False)
+        self.assertEqual(unauthorized.exception.code, 401)
+
+        status_code, readiness = self.get("/api/readiness")
+        self.assertEqual(status_code, 200)
+        self.assertTrue(readiness["ready"])
+        self.assertEqual(readiness["version"], "2.3.1")
+        checks = {item["id"]: item for item in readiness["checks"]}
+        self.assertTrue(checks["runtime_database"]["ok"])
+        self.assertTrue(checks["external_automation_lock"]["ok"])
+        self.assertTrue(checks["pwa_shell"]["ok"])
+        self.assertFalse(checks["provider_inference"]["required"])
+        self.assertFalse(checks["provider_inference"]["ok"])
+        self.assertFalse(readiness["boundaries"]["native_artifacts_verified"])
 
     def test_cto_routes_are_commander_protected_and_sanitized(self):
         with self.assertRaises(HTTPError) as unauthorized:

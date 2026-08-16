@@ -14,6 +14,7 @@ const AX = {
   selectedProvider: null,
   selectedTeam: null,
   pendingMigration: null,
+  lastCtoResult: null,
   ctoProvidersRendered: false,
   colors: {
     orion: { hex: "#42e8ca", rgb: "66,232,202" },
@@ -1167,25 +1168,120 @@ function showCommandResult(result) {
 function showCtoCommandResult(result) {
   const plan = result.cto_plan;
   const approval = Boolean(result.requires_approval);
+  AX.lastCtoResult = result;
   const delegations = (plan.delegations || []).map((item, index) => {
     const owner = agentById(item.owner);
-    return `<div class="cto-plan-item"><i>${escapeHTML(item.owner || `0${index + 1}`)}</i><strong>${escapeHTML(item.action)}</strong><small>${escapeHTML(owner?.name || item.owner)} · ACCEPTANCE: ${escapeHTML(item.acceptance)}</small></div>`;
+    const dependencies = (item.dependencies || []).length
+      ? item.dependencies.map(value => escapeHTML(value)).join(" · ")
+      : "None";
+    return `<div class="cto-plan-item">
+      <i>${String(index + 1).padStart(2, "0")}</i>
+      <div class="cto-plan-step-head"><strong>${escapeHTML(item.action)}</strong><span>${escapeHTML(owner?.name || item.owner)} · ${escapeHTML(item.estimated_effort || "Not estimated")}</span></div>
+      <div class="cto-step-details">
+        <span><b>WHY</b>${escapeHTML(item.rationale || "Assigned to the best-matched role.")}</span>
+        <span><b>DELIVERABLE</b>${escapeHTML(item.deliverable || item.action)}</span>
+        <span><b>DEPENDENCIES</b>${dependencies}</span>
+        <span><b>ACCEPTANCE</b>${escapeHTML(item.acceptance)}</span>
+      </div>
+      ${item.requires_approval ? `<em>${icon("lock")} COMMANDER APPROVAL</em>` : ""}
+    </div>`;
   }).join("");
   const assumptions = (plan.assumptions || []).length
-    ? `<div class="command-plan">${plan.assumptions.map((item, index) => `<div><i>A${index + 1}</i><span>${escapeHTML(item)}</span></div>`).join("")}</div>`
+    ? `<div><span class="section-kicker">ASSUMPTIONS</span><div class="command-plan">${plan.assumptions.map((item, index) => `<div><i>A${index + 1}</i><span>${escapeHTML(item)}</span></div>`).join("")}</div></div>`
     : "";
+  const metrics = (plan.success_metrics || []).length
+    ? `<div><span class="section-kicker">SUCCESS METRICS</span><div class="command-plan">${plan.success_metrics.map((item, index) => `<div><i>M${index + 1}</i><span>${escapeHTML(item)}</span></div>`).join("")}</div></div>`
+    : "";
+  const continuity = plan.continuity?.items_used
+    ? `Continuity: ${plan.continuity.items_used} bounded prior plan summaries used as context only.`
+    : "Continuity: no prior Orion plan summary was used.";
   $("#command-result").innerHTML = `<div class="cto-result">
     <div class="dialog-result-icon ${approval ? "approval" : ""}">${icon(approval ? "lock" : "spark")}</div>
     <div class="command-result-head"><span class="section-kicker ${approval ? "amber" : ""}">ORION CTO · ${escapeHTML(plan.provider.name)} / ${escapeHTML(plan.provider.model)}</span><h2>${escapeHTML(plan.executive_summary)}</h2><p>${escapeHTML(result.message)}</p></div>
     <div class="command-ticket"><span>${escapeHTML(result.task.title)}</span><b>${escapeHTML(result.task.id)} · RISK ${escapeHTML(plan.risk_level).toUpperCase()}${approval ? " · COMMANDER APPROVAL" : " · PLAN STAGED"}</b></div>
     <div class="cto-answer">${escapeHTML(plan.answer)}</div>
-    ${delegations ? `<div><span class="section-kicker">INTERNAL DELEGATION PLAN</span><div class="cto-plan-list">${delegations}</div></div>` : ""}
+    ${delegations ? `<div><span class="section-kicker">ORDERED INTERNAL EXECUTION PLAN</span><div class="cto-plan-list">${delegations}</div></div>` : ""}
+    ${metrics}
     ${assumptions}
     <div class="cto-next-action"><b>NEXT ACTION · </b>${escapeHTML(plan.next_action)}</div>
+    <div class="cto-continuity-note">${escapeHTML(continuity)}</div>
     <div class="cto-result-boundary">${icon("shield")}<span>${escapeHTML(plan.execution_boundary)}</span></div>
-    <button class="dialog-action" data-go-view="runtime" data-close-dialog>${approval ? "Review Commander approval gate" : "Open auditable staged workflow"}</button>
+    <div class="cto-result-actions"><button class="dialog-action cto-export-action" data-export-cto>${icon("download")} Download execution brief (.md)</button><button class="dialog-action" data-go-view="runtime" data-close-dialog>${approval ? "Review Commander approval gate" : "Open auditable staged workflow"}</button></div>
   </div>`;
   $("#command-dialog").showModal();
+}
+
+function downloadCtoBrief() {
+  const result = AX.lastCtoResult;
+  if (!result?.cto_plan) {
+    toast("No Orion execution brief is available yet.", "error");
+    return;
+  }
+  const plan = result.cto_plan;
+  const lines = [
+    "# Atlantis-X · Orion CTO Execution Brief",
+    "",
+    `- Task: ${result.task.id}`,
+    `- Goal: ${result.task.title}`,
+    `- Generated: ${plan.generated_at || "not recorded"}`,
+    `- Provider: ${plan.provider?.name || "unknown"} / ${plan.provider?.model || "unknown"}`,
+    `- Risk: ${plan.risk_level}`,
+    `- Commander approval required: ${result.requires_approval ? "yes" : "no"}`,
+    `- Continuity summaries used: ${plan.continuity?.items_used || 0}`,
+    "",
+    "## Executive summary",
+    "",
+    plan.executive_summary,
+    "",
+    "## CTO answer",
+    "",
+    plan.answer,
+    "",
+    "## Ordered execution plan",
+    ""
+  ];
+  (plan.delegations || []).forEach((item, index) => {
+    lines.push(
+      `### ${index + 1}. ${item.owner} · ${item.action}`,
+      "",
+      `- Rationale: ${item.rationale || "Not supplied"}`,
+      `- Deliverable: ${item.deliverable || item.action}`,
+      `- Dependencies: ${(item.dependencies || []).join("; ") || "None"}`,
+      `- Estimated effort: ${item.estimated_effort || "Not estimated"}`,
+      `- Acceptance: ${item.acceptance}`,
+      `- Commander approval: ${item.requires_approval ? "required" : "not required"}`,
+      ""
+    );
+  });
+  lines.push("## Success metrics", "");
+  (plan.success_metrics || []).forEach(item => lines.push(`- ${item}`));
+  if (!(plan.success_metrics || []).length) lines.push("- No explicit metric supplied by the model.");
+  lines.push("", "## Assumptions", "");
+  (plan.assumptions || []).forEach(item => lines.push(`- ${item}`));
+  if (!(plan.assumptions || []).length) lines.push("- None supplied.");
+  lines.push(
+    "",
+    "## Next action",
+    "",
+    plan.next_action,
+    "",
+    "## Execution boundary",
+    "",
+    plan.execution_boundary,
+    "",
+    "> This brief records AI planning and delegation. It is not evidence that an external action was executed.",
+    ""
+  );
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `Atlantis-X-${result.task.id}-execution-brief.md`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast("Execution brief downloaded as Markdown.");
 }
 
 async function updateTaskStatus(select) {
@@ -1341,6 +1437,7 @@ function bindEvents() {
     if (event.target.closest("[data-close-sovereign]")) closeSovereignDecision();
     if (event.target.closest("[data-close-install]")) $("#install-dialog")?.close();
     if (event.target.closest("[data-close-vault]")) closeNativeVault();
+    if (event.target.closest("[data-export-cto]")) downloadCtoBrief();
     if (event.target.closest("[data-close-dialog]")) event.target.closest("dialog")?.close();
 
     const integration = event.target.closest("[data-integration]");

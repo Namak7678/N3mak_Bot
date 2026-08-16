@@ -6,6 +6,7 @@ use reqwest::Url;
 use rusqlite::{params, OptionalExtension};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::time::Duration as StdDuration;
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -15,6 +16,7 @@ const CAPABILITIES_JSON: &str = include_str!("../../config/capabilities.json");
 const PROVIDERS_JSON: &str = include_str!("../../config/providers.json");
 const MAX_SECRET_BYTES: usize = 8_192;
 const MAX_SKILL_BYTES: usize = 262_144;
+const MAX_PROVIDER_RESPONSE_BYTES: usize = 1_048_576;
 const STAGE_IDS: [&str; 7] = [
     "plan", "execute", "review", "security", "approval", "release", "complete",
 ];
@@ -587,7 +589,7 @@ pub fn state(manager: &VaultManager) -> Result<Value, VaultError> {
         "generated_at": now(),
         "connected": true,
         "engine": "native",
-        "version": "2.2-native",
+        "version": "2.3.1-native",
         "execution_mode": "auditable_native_local_sandbox",
         "a2a": {
             "protocol": "atlantis-local-a2a-v1",
@@ -1041,13 +1043,31 @@ fn validate_provider_endpoint(definition: &Value, endpoint: &str) -> Result<(), 
     if !parsed.username().is_empty() || parsed.password().is_some() || parsed.query().is_some() || parsed.fragment().is_some() {
         return Err(invalid("provider endpoint cannot contain credentials, a query, or a fragment"));
     }
-    if definition["local"].as_bool().unwrap_or(false) && parsed.scheme() == "http" {
-        let loopback = matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "::1" | "[::1]"));
-        if !loopback {
-            return Err(invalid("unencrypted local provider endpoints must use a loopback host"));
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| invalid("provider endpoint requires a host"))?;
+    if definition["local"].as_bool().unwrap_or(false) {
+        if parsed.scheme() != "http" || !matches!(host, "localhost" | "127.0.0.1" | "::1") {
+            return Err(invalid("local provider endpoints must use HTTP on an exact loopback host"));
         }
-    } else if parsed.scheme() != "https" {
-        return Err(invalid("hosted provider endpoints must use HTTPS"));
+        return Ok(());
+    }
+    if parsed.scheme() != "https" || !matches!(parsed.port(), None | Some(443)) {
+        return Err(invalid("hosted provider endpoints must use HTTPS on port 443"));
+    }
+    if text(definition, "adapter", "") == "azure_openai" {
+        if host == "openai.azure.com" || !host.ends_with(".openai.azure.com") {
+            return Err(invalid("Azure OpenAI endpoints must use a resource subdomain of openai.azure.com"));
+        }
+    } else {
+        let catalog_endpoint = text(definition, "base_url", "");
+        let catalog_host = Url::parse(&catalog_endpoint)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_string))
+            .ok_or_else(|| invalid("provider catalog endpoint is invalid"))?;
+        if !host.eq_ignore_ascii_case(&catalog_host) {
+            return Err(invalid("provider endpoint host does not match the selected provider"));
+        }
     }
     Ok(())
 }
@@ -1166,6 +1186,7 @@ fn provider_connection(manager: &VaultManager, provider_id: &str) -> Result<(Val
                 |row| Ok(Zeroizing::new(row.get::<_, String>(0)?)),
             )
             .optional()?;
+        validate_provider_endpoint(&definition, &config.0)?;
         let auth = text(&definition, "auth", "bearer");
         if secret.is_none() && !matches!(auth.as_str(), "none" | "optional-bearer") {
             return Err(invalid("provider credential is not stored"));
@@ -1215,9 +1236,31 @@ fn http_client() -> Result<Client, VaultError> {
     Client::builder()
         .connect_timeout(StdDuration::from_secs(8))
         .timeout(StdDuration::from_secs(20))
-        .user_agent("Atlantis-X/2.2")
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent("Atlantis-X/2.3.1")
         .build()
-        .map_err(|error| invalid(format!("unable to create provider health client: {error}")))
+        .map_err(|_| invalid("unable to create the provider HTTP client"))
+}
+
+fn bounded_provider_json(response: reqwest::blocking::Response) -> Result<Value, VaultError> {
+    let status = response.status();
+    if !status.is_success() {
+        return Err(invalid(format!("provider request returned HTTP {status}")));
+    }
+    if let Some(length) = response.content_length() {
+        if length > MAX_PROVIDER_RESPONSE_BYTES as u64 {
+            return Err(invalid("provider response exceeded the 1 MiB safety limit"));
+        }
+    }
+    let mut bytes = Vec::new();
+    response
+        .take((MAX_PROVIDER_RESPONSE_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|_| invalid("provider response could not be read"))?;
+    if bytes.len() > MAX_PROVIDER_RESPONSE_BYTES {
+        return Err(invalid("provider response exceeded the 1 MiB safety limit"));
+    }
+    serde_json::from_slice(&bytes).map_err(|_| invalid("provider returned invalid JSON"))
 }
 
 pub fn verify_provider(manager: &VaultManager, provider_id: &str) -> Result<Value, VaultError> {
@@ -1247,14 +1290,14 @@ pub fn verify_provider(manager: &VaultManager, provider_id: &str) -> Result<Valu
     };
     let response = match http_client()?.get(url).headers(headers).send() {
         Ok(response) => response,
-        Err(error) => {
+        Err(_) => {
             record_audit(
                 manager,
                 "provider.health_failed",
                 "disabled",
-                json!({ "provider_id": provider_id, "failure": "network_or_tls" }),
+                json!({ "provider_id": provider_id, "failure": "network_tls_or_redirect" }),
             )?;
-            return Err(invalid(format!("provider health check failed: {error}")));
+            return Err(invalid("provider health check failed, timed out, or attempted a redirect"));
         }
     };
     if !response.status().is_success() {
@@ -1387,14 +1430,8 @@ pub fn provider_chat(manager: &VaultManager, provider_id: &str, prompt: &str) ->
         .headers(headers)
         .json(&body)
         .send()
-        .map_err(|error| invalid(format!("provider request failed: {error}")))?;
-    let status = response.status();
-    let payload: Value = response
-        .json()
-        .map_err(|error| invalid(format!("provider returned invalid JSON: {error}")))?;
-    if !status.is_success() {
-        return Err(invalid(format!("provider request returned HTTP {status}")));
-    }
+        .map_err(|_| invalid("provider request failed or timed out"))?;
+    let payload = bounded_provider_json(response)?;
     let output = match adapter.as_str() {
         "anthropic" => payload["content"][0]["text"].as_str(),
         "gemini" => payload["candidates"][0]["content"]["parts"][0]["text"].as_str(),

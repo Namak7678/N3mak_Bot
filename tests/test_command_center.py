@@ -137,6 +137,16 @@ class WorkforceEngineTests(unittest.TestCase):
         self.assertIn("schema_version: 2", native_source)
         self.assertIn("vault-passphrase-confirm", (root / "web" / "index.html").read_text())
 
+    def test_native_provider_transport_source_is_fail_closed(self):
+        root = Path(__file__).resolve().parents[1]
+        runtime_source = (root / "src-tauri" / "src" / "runtime.rs").read_text()
+        self.assertIn("MAX_PROVIDER_RESPONSE_BYTES: usize = 1_048_576", runtime_source)
+        self.assertIn("redirect(reqwest::redirect::Policy::none())", runtime_source)
+        self.assertIn("bounded_provider_json(response)", runtime_source)
+        self.assertIn("local provider endpoints must use HTTP on an exact loopback host", runtime_source)
+        self.assertIn("provider endpoint host does not match the selected provider", runtime_source)
+        self.assertGreaterEqual(runtime_source.count("validate_provider_endpoint(&definition"), 2)
+
     def test_native_management_catalog_is_default_deny_and_honest(self):
         root = Path(__file__).resolve().parents[1]
         catalog = json.loads((root / "config" / "providers.json").read_text())

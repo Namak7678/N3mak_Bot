@@ -22,7 +22,7 @@ A PWA still connects to its hosted Atlantis-X API. It does not receive unrestric
 - an audited local Agent2Agent handoff ledger, with no external A2A transport enabled;
 - sovereign approval stops for high-risk directives;
 - 22 provider catalog entries, of which 21 map to implemented protocol families and remain unconfigured by default; AWS Bedrock is visibly catalog-only until a native SigV4 adapter exists;
-- BYOK storage in SQLCipher, strict endpoint validation, real health requests, stale-health invalidation, and a database constraint that blocks enablement until permission, health and rollback gates all pass;
+- BYOK storage in SQLCipher, strict endpoint validation at configuration and request time, hosted-provider host pinning, redirect rejection, a 1 MiB chat-response ceiling, real health requests, stale-health invalidation, and a database constraint that blocks enablement until permission, health and rollback gates all pass;
 - `SKILL.md` installation, disabled by default;
 - encrypted migration staging for agents, prompts, memories, skills and settings. Supported entries are normalized into category records, credential-, token-, password-, secret- and private-key-named fields are stripped recursively, and every imported record remains disabled;
 - organizations containing agent, human and registered-device identity records; device entries are not represented as authenticated pairings;
@@ -30,6 +30,8 @@ A PWA still connects to its hosted Atlantis-X API. It does not receive unrestric
 - no external desktop, browser, publishing, payment or deployment automation command.
 
 This native source is deliberately separate from the development web server's unencrypted SQLite database. Secrets must never be copied into the browser runtime store.
+
+The source package metadata is reconciled at **2.3.1**, and native state identifies the engine as `2.3.1-native`. These values describe the source revision only; they are not evidence of compilation, signing, installation, or target-device verification.
 
 The Rust source has not been compiled in this repository environment because Rust and the platform GUI SDKs are unavailable here. It must pass compilation and target-device validation before it is described as a distributable native application.
 

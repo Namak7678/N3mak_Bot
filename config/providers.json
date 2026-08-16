@@ -17,7 +17,7 @@
       "adapter": "openai_compatible",
       "auth": "bearer",
       "base_url": "https://api.openai.com/v1",
-      "default_model": "gpt-4.1-mini",
+      "default_model": "gpt-5.4-mini",
       "local": false,
       "status": "unconfigured"
     },
@@ -27,7 +27,7 @@
       "adapter": "anthropic",
       "auth": "x-api-key",
       "base_url": "https://api.anthropic.com/v1",
-      "default_model": "claude-sonnet-4-5",
+      "default_model": "claude-sonnet-5",
       "local": false,
       "status": "unconfigured"
     },

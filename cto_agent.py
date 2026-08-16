@@ -225,12 +225,23 @@ Return only one valid JSON object with this exact shape:
   "risk_level": "low|medium|high|critical",
   "requires_approval": false,
   "assumptions": ["..."],
+  "success_metrics": ["measurable outcome"],
   "delegations": [
-    {"owner": "atlas|forge|sentinel|nexus|pulse|athena|orion", "action": "...", "acceptance": "..."}
+    {
+      "owner": "orion|athena|atlas|forge|sentinel|pulse|nexus|meridian|nautilus|aegis|nova",
+      "action": "ordered implementation step",
+      "rationale": "why this step and owner are necessary",
+      "deliverable": "concrete output produced by this step",
+      "acceptance": "measurable completion test",
+      "dependencies": ["earlier step or input"],
+      "estimated_effort": "bounded estimate",
+      "requires_approval": false
+    }
   ],
   "next_action": "one concrete next step"
 }
-Use no more than 8 delegations and 6 assumptions. Do not include secrets."""
+Use no more than 8 ordered delegations, 6 assumptions, 6 success metrics, and 5 dependencies per delegation.
+Explain implementation steps clearly enough for the Commander to execute or review them. Do not include secrets."""
         return "{}\n\nCurrent local context:\n{}\n\nCommander goal:\n{}".format(
             instructions,
             json.dumps(context, ensure_ascii=False),
@@ -273,8 +284,30 @@ Use no more than 8 delegations and 6 assumptions. Do not include secrets."""
             if len(assumptions) == 6:
                 break
 
-        allowed_owners = {"atlas", "forge", "sentinel", "nexus", "pulse", "athena", "orion"}
-        delegations: List[Dict[str, str]] = []
+        success_metrics: List[str] = []
+        source_metrics = payload.get("success_metrics", [])
+        if isinstance(source_metrics, list):
+            for value in source_metrics:
+                cleaned = cls._clean(value, 500)
+                if cleaned:
+                    success_metrics.append(cleaned)
+                if len(success_metrics) == 6:
+                    break
+
+        allowed_owners = {
+            "orion",
+            "athena",
+            "atlas",
+            "forge",
+            "sentinel",
+            "pulse",
+            "nexus",
+            "meridian",
+            "nautilus",
+            "aegis",
+            "nova",
+        }
+        delegations: List[Dict[str, Any]] = []
         source_delegations = payload.get("delegations", [])
         if isinstance(source_delegations, list):
             for item in source_delegations:
@@ -285,23 +318,55 @@ Use no more than 8 delegations and 6 assumptions. Do not include secrets."""
                     owner = "orion"
                 action = cls._clean(item.get("action"), 700)
                 acceptance = cls._clean(item.get("acceptance"), 700)
+                rationale = cls._clean(item.get("rationale"), 500) or "Assigned to the role best matched to this step."
+                deliverable = cls._clean(item.get("deliverable"), 500) or action
+                estimated_effort = cls._clean(item.get("estimated_effort"), 100) or "Not estimated"
+                dependencies: List[str] = []
+                source_dependencies = item.get("dependencies", [])
+                if isinstance(source_dependencies, list):
+                    for value in source_dependencies:
+                        cleaned = cls._clean(value, 220)
+                        if cleaned:
+                            dependencies.append(cleaned)
+                        if len(dependencies) == 5:
+                            break
                 if action and acceptance:
-                    delegations.append({"owner": owner, "action": action, "acceptance": acceptance})
+                    delegations.append(
+                        {
+                            "owner": owner,
+                            "action": action,
+                            "rationale": rationale,
+                            "deliverable": deliverable,
+                            "acceptance": acceptance,
+                            "dependencies": dependencies,
+                            "estimated_effort": estimated_effort,
+                            "requires_approval": item.get("requires_approval") is True,
+                        }
+                    )
                 if len(delegations) == 8:
                     break
         if not delegations:
-            delegations.append({
-                "owner": "orion",
-                "action": "Clarify and sequence the requested goal: {}".format(goal),
-                "acceptance": "The Commander receives a bounded plan with measurable completion criteria.",
-            })
+            delegations.append(
+                {
+                    "owner": "orion",
+                    "action": "Clarify and sequence the requested goal: {}".format(goal),
+                    "rationale": "A bounded plan is required before any specialist can begin.",
+                    "deliverable": "A sequenced implementation plan.",
+                    "acceptance": "The Commander receives a bounded plan with measurable completion criteria.",
+                    "dependencies": [],
+                    "estimated_effort": "One planning cycle",
+                    "requires_approval": False,
+                }
+            )
 
+        step_approval = any(item["requires_approval"] for item in delegations)
         return {
             "executive_summary": summary,
             "answer": answer,
             "risk_level": risk,
-            "requires_approval": payload.get("requires_approval") is True or risk == "critical",
+            "requires_approval": payload.get("requires_approval") is True or risk == "critical" or step_approval,
             "assumptions": assumptions,
+            "success_metrics": success_metrics,
             "delegations": delegations,
             "next_action": next_action,
         }

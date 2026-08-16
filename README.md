@@ -1,6 +1,6 @@
 # Atlantis-X AI Command Center
 
-واجهة تشغيلية عربية لفريق **Atlantis-X AI Workforce v2.3** يقوده **ORION** كمدير تقني AI واحد أمام المستخدم. يحوّل المشروع تصور «شركة AI داخل بيئة العمل» إلى مركز قيادة متكامل: يحدد القائد الهدف، يحلله Orion عبر نموذج حقيقي عند ربط BYOK، ثم ينسّق الفريق الداخلي ضمن بوابات أمن وقرار وسجل تدقيق دائم.
+واجهة تشغيلية عربية لفريق **Atlantis-X AI Workforce v2.3** ضمن حزمة التشغيل **2.3.1**، يقوده **ORION** كمدير تقني AI واحد أمام المستخدم. يحوّل المشروع تصور «شركة AI داخل بيئة العمل» إلى مركز قيادة متكامل: يحدد القائد الهدف، يحلله Orion عبر نموذج حقيقي عند ربط BYOK، ثم ينسّق الفريق الداخلي ضمن بوابات أمن وقرار وسجل تدقيق دائم.
 
 ## ما تم بناؤه
 
@@ -11,6 +11,9 @@
 - إعداد BYOK رسومي داخل التطبيق يدعم ست عائلات API فعلية: OpenAI-compatible وAzure OpenAI وAnthropic وGemini وCohere وOllama.
 - اتصال الويب لا يُفعّل إلا بعد إذن القائد، تأكيد الرجوع، ونجاح استدلال health challenge حقيقي. المفتاح يبقى في ذاكرة عملية الخادم لهذه الجلسة فقط، ولا يُكتب إلى SQLite أو Git أو App Shell.
 - هدف المستخدم ينتقل إلى `/api/cto/run` فقط عندما تكون جلسة النموذج متصلة؛ وإلا يبقى Orion في وضع التنسيق الحتمي المحلي بوسم واضح.
+- ذاكرة استمرارية محدودة تمرر إلى Orion آخر أربع خلاصات خطط فقط بعد ضبط الطول وتنقيح أنماط الأسرار؛ ولا تمرر الإجابات الكاملة أو payload المزود أو المفتاح، وتبقى الذاكرة سياقًا لا سلطة.
+- خطة CTO تشمل سبب كل تفويض، المخرج، الاعتماديات، تقدير الجهد، معيار القبول، مؤشرات النجاح، وبوابة الموافقة؛ وتدعم الأدوار الـ11 وتُنزّل كـMarkdown execution brief.
+- مسار readiness محمي يتحقق من سجل Workforce وSQLite وقفل الأتمتة الخارجية وملفات PWA، مع اعتبار جلسة المزود فحصًا اختياريًا.
 - دورة حالات كاملة: `PLAN → EXECUTE → REVIEW → SECURITY → APPROVAL → RELEASE → COMPLETE`.
 - تشغيل مستقل افتراضيًا حتى الاكتمال أو حتى أقرب بوابة سيادية.
 - سجل Audit لكل انتقال وتغيير يدوي وقرار، مع المنفّذ والنتيجة والتوقيت.
@@ -29,7 +32,8 @@
 2. اختر المزود؛ ستملأ الواجهة endpoint واسم model الافتراضيين. Azure يتطلب نطاق مورد `*.openai.azure.com`، والمزود المحلي يتطلب loopback على الجهاز الذي يشغّل خادم Atlantis-X.
 3. أدخل API key، وافق على الوصول المحدود للنموذج، وأكد أن **Disconnect** هو خطة الرجوع.
 4. اضغط **Verify provider & activate CTO**. لا تعرض الواجهة حالة LIVE إلا بعد نجاح طلب inference فعلي يعيد challenge المتوقع.
-5. أعطِ Orion هدفك من اللوحة. يعرض التطبيق الإجابة، المخاطر، الافتراضات، التفويضات، ومعيار قبول كل خطوة؛ ويحفظ الخطة المنقحة فقط في workflow المحلي.
+5. أعطِ Orion هدفك من اللوحة. يعرض التطبيق الإجابة، المخاطر، الافتراضات، مؤشرات النجاح، وخطوات التفويض المرتبة مع السبب والمخرج والاعتماديات والجهد ومعيار القبول.
+6. نزّل **Execution brief (.md)** لتسليم الخطة أو مراجعتها خارج الواجهة؛ يحمل الملف حد التنفيذ الصريح ولا يدّعي تنفيذ أثر خارجي.
 
 الاتصال يمنح Orion **استدلالًا وتخطيطًا فقط**. لا يحصل النموذج على أدوات filesystem أو browser أو desktop أو دفع أو نشر أو deployment. الخطة لا تعني تنفيذ أثر خارجي، وتظل العمليات السيادية وعالية الخطورة عند بوابة موافقة القائد.
 
@@ -63,7 +67,7 @@ export ATLANTISX_COMMANDER_KEY="replace-with-a-long-random-secret"
 python server.py --host 0.0.0.0 --port 4173
 ```
 
-ثم افتح `http://localhost:4173`. تحتفظ الواجهة بالمفتاح في `sessionStorage` للجلسة الحالية فقط.
+ثم افتح `http://localhost:4173`. تحتفظ الواجهة بالمفتاح في `sessionStorage` للجلسة الحالية فقط. خطوات preflight وTLS وreadiness والنسخ الاحتياطي والرجوع وبناء كل منصة موثقة في [`docs/OPERATIONS_RUNBOOK.md`](docs/OPERATIONS_RUNBOOK.md).
 
 ## تشغيل الخادم بالحاوية — اختياري
 
@@ -114,6 +118,7 @@ cto_agent.py                 بوابة Orion CTO المقيدة وموصلات 
 docs/
   AI_WORKFORCE_ARCHITECTURE.md
   NATIVE_APP.md
+  OPERATIONS_RUNBOOK.md       خطوات التشغيل والنشر والرجوع وبناء المنصات وقائمة قبول الإصدار
 tests/
   test_command_center.py     اختبارات المحرك المحلي
   test_cto_agent.py          موصلات CTO ودورة المفتاح والمخاطر ومسارات HTTP
@@ -122,7 +127,8 @@ tests/
 ## Runtime API
 
 ```text
-GET  /api/health
+GET  /api/health                  liveness عام
+GET  /api/readiness               readiness محمي؛ يعيد 503 عند فشل شرط مطلوب
 GET  /api/state
 POST /api/cto/connect           {"provider_id": "...", "endpoint": "...", "model": "...", "secret": "...", "permission_granted": true, "rollback_ready": true}
 POST /api/cto/run               {"command": "..."}
@@ -133,7 +139,7 @@ POST /api/tasks/{id}/decision   {"decision": "approve|reject", "note": "..."}
 POST /api/tasks/{id}/status     {"status": "..."}
 ```
 
-عند ضبط مفتاح القائد، تتطلب كل مسارات Control API باستثناء `/api/health`:
+عند ضبط مفتاح القائد، تتطلب كل مسارات Control API — بما فيها `/api/readiness` — باستثناء `/api/health`:
 
 ```text
 Authorization: Bearer <ATLANTISX_COMMANDER_KEY>

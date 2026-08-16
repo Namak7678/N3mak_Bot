@@ -30,7 +30,7 @@ In the web PWA, Orion has two explicit modes:
 - `setup_required`: deterministic local classification and orchestration only;
 - `live_model_planning`: provider-backed analysis after graphical BYOK setup passes permission, inference health and disconnect/forget rollback gates.
 
-Provider credentials are never part of shared truth. One web credential is retained in Python process memory only and is omitted from state, task plans, SQLite and audit records. The model receives bounded counts/role IDs rather than the database. Provider inference can produce an answer and delegation plan, but exposes no filesystem, browser, payment, publication or deployment tool. The deterministic classifier and model risk signal independently escalate approval; neither can bypass Commander authority.
+Provider credentials are never part of shared truth. One web credential is retained in Python process memory only and is omitted from state, task plans, SQLite and audit records. The model receives bounded counts/role IDs and at most four sanitized prior Orion plan summaries rather than the database. Full prior answers, provider payloads and audit logs are excluded, common credential assignments are redacted, and continuity is explicitly context rather than authority. Provider inference can produce an answer and an ordered delegation plan across all 11 roles, including rationale, deliverable, dependencies, effort, acceptance criteria and success metrics, but exposes no filesystem, browser, payment, publication or deployment tool. The deterministic classifier and model risk signal independently escalate approval; neither can bypass Commander authority.
 
 ## Shared truth
 
@@ -109,6 +109,7 @@ Agent prompts, tools or policies are never silently self-modified in production.
 ## Local API
 
 - `GET /api/health` — public liveness and authentication-mode health.
+- `GET /api/readiness` — protected required/optional checks for registry, SQLite, PWA, automation lock and provider inference.
 - `GET /api/state` — shared Command Center, workflow, authority, sanitized CTO status and audit state.
 - `POST /api/cto/connect` — validate a provider endpoint and activate the session only after a live inference challenge.
 - `POST /api/cto/run` — request a structured CTO answer/plan and stage it in the normal auditable workflow.
@@ -140,4 +141,4 @@ No external automation command is currently exposed. Adding credentials alone ne
 
 The included container runs as a non-root user, exposes a health check and writes runtime state to a dedicated volume. `compose.yaml` refuses to start unless the commander key is supplied. HTTP security headers constrain content, browser capabilities and cross-origin resources while allowing the managed preview frame.
 
-For public deployment, terminate TLS at a trusted reverse proxy, add rate limiting and centralized identity, restrict network access, back up the state volume, and replace the shared key with OIDC or another auditable identity provider. External execution remains disabled until each adapter has its own credentials, health check, minimum permission scope and rollback policy.
+For public deployment, terminate TLS at a trusted reverse proxy, add rate limiting and centralized identity, restrict network access, back up the state volume, and replace the shared key with OIDC or another auditable identity provider. External execution remains disabled until each adapter has its own credentials, health check, minimum permission scope and rollback policy. The executable deployment, provider, incident-response, native-build and acceptance steps are maintained in [`OPERATIONS_RUNBOOK.md`](OPERATIONS_RUNBOOK.md).

@@ -68,6 +68,10 @@
 
     <div class="sidebar-section-label">البنية الأساسية</div>
     <nav class="main-nav secondary-nav">
+      <button class="nav-item" data-view="providers"><svg><use href="#i-spark"/></svg><span>مزودو الذكاء BYOK</span></button>
+      <button class="nav-item" data-view="skills"><svg><use href="#i-tasks"/></svg><span>المهارات والترحيل</span></button>
+      <button class="nav-item" data-view="organizations"><svg><use href="#i-users"/></svg><span>الفرق والأجهزة</span></button>
+      <button class="nav-item" data-view="schedules"><svg><use href="#i-clock"/></svg><span>سير العمل المتكرر</span></button>
       <button class="nav-item" data-view="integrations"><svg><use href="#i-plug"/></svg><span>التكاملات</span></button>
     </nav>
 
@@ -290,6 +294,82 @@
         </div>
       </section>
 
+      <section class="view" id="view-providers" data-view-section="providers">
+        <div class="page-lead">
+          <div><span class="section-kicker">NATIVE PROVIDER REGISTRY · BYOK</span><h1>مزودو الذكاء الاصطناعي</h1><p>اختر المزود والنموذج واحفظ المفتاح داخل SQLCipher. لا يبدأ أي استدلال حتى يكتمل الإذن وفحص الصحة وخطة الرجوع.</p></div>
+          <div class="lead-actions"><span class="registry-count" id="provider-count">22 PROVIDERS</span><div class="honesty-badge"><svg><use href="#i-lock"/></svg> المفاتيح لا تعود إلى الواجهة</div></div>
+        </div>
+        <div class="provider-policy panel">
+          <div><b>01</b><span>CONFIGURE</span><small>المفتاح داخل SQLCipher</small></div><i></i>
+          <div><b>02</b><span>PERMISSION</span><small>قرار صريح منك</small></div><i></i>
+          <div><b>03</b><span>HEALTH</span><small>اتصال شبكة حقيقي</small></div><i></i>
+          <div><b>04</b><span>ROLLBACK</span><small>إيقاف وحذف المفتاح</small></div><i></i>
+          <div><b>05</b><span>ENABLE</span><small>الاستدلال فقط</small></div>
+        </div>
+        <div class="provider-grid" id="provider-grid"></div>
+        <div class="native-surface-note"><svg><use href="#i-shield"/></svg><p><strong>فصل الصلاحيات</strong><span>تفعيل مزود نموذج لا يفعّل المتصفح أو سطح المكتب أو النشر أو أي موصل خارجي. قدرات الأتمتة السبعة تبقى Default Deny.</span></p></div>
+      </section>
+
+      <section class="view" id="view-skills" data-view-section="skills">
+        <div class="page-lead">
+          <div><span class="section-kicker">SKILL.md · ENCRYPTED IMPORTS</span><h1>المهارات والترحيل</h1><p>ثبّت تعليمات الوكلاء بصيغة SKILL.md، أو انقل الوكلاء والـprompts والذاكرة والإعدادات من حزمة JSON مراجَعة.</p></div>
+          <div class="honesty-badge"><svg><use href="#i-shield"/></svg> كل وارد معطّل افتراضيًا</div>
+        </div>
+        <div class="asset-workbench">
+          <form class="panel asset-form" id="skill-form">
+            <div class="panel-heading"><div><span class="section-kicker">INSTALL SKILL</span><h2>تثبيت SKILL.md</h2></div><label class="file-picker" for="skill-file"><svg><use href="#i-download"/></svg> اختيار ملف</label></div>
+            <input id="skill-file" type="file" accept=".md,text/markdown" hidden>
+            <label for="skill-content">محتوى المهارة <small>حد أقصى 256 KiB · يجب أن يحتوي عنوان Markdown</small></label>
+            <textarea id="skill-content" rows="11" required placeholder="---&#10;id: research-brief&#10;name: Research Brief&#10;version: 1.0.0&#10;description: Produce sourced research briefs&#10;---&#10;# Research Brief&#10;Instructions…"></textarea>
+            <button type="submit" class="primary-button"><svg><use href="#i-lock"/></svg> تثبيت مشفّر ومعطّل</button>
+          </form>
+
+          <article class="panel migration-form">
+            <div class="panel-heading"><div><span class="section-kicker amber">MIGRATION IMPORTER</span><h2>ترحيل البيانات الشخصية</h2></div><span class="migration-format">JSON · 5 MiB</span></div>
+            <p>الحقول المدعومة: <b>agents</b> و<b>prompts</b> و<b>memories</b> و<b>skills</b> و<b>settings</b>. مفاتيح المزودين مستثناة دائمًا.</p>
+            <label class="migration-drop" for="migration-file"><svg><use href="#i-download"/></svg><strong>اختر حزمة الترحيل</strong><span>تظهر معاينة وعدّاد قبل الكتابة في الخزنة</span></label>
+            <input id="migration-file" type="file" accept="application/json,.json" hidden>
+            <div class="migration-preview" id="migration-preview"></div>
+            <button type="button" class="primary-button" id="migration-apply" disabled>تأكيد الترحيل إلى SQLCipher</button>
+          </article>
+        </div>
+        <div class="section-heading"><div><span class="section-kicker">INSTALLED ASSETS</span><h2>المهارات المثبتة</h2></div></div>
+        <div class="asset-grid" id="skills-grid"></div>
+        <article class="panel import-history-card"><div class="panel-heading"><div><span class="section-kicker">MIGRATION AUDIT</span><h2>سجل عمليات الترحيل</h2></div></div><div id="import-history"></div></article>
+      </section>
+
+      <section class="view" id="view-organizations" data-view-section="organizations">
+        <div class="page-lead">
+          <div><span class="section-kicker">MULTI-AGENT ORGANIZATIONS</span><h1>الفرق والأجهزة والبشر</h1><p>اجمع وكيلًا وإنسانًا وهوية جهاز مسجلة في فريق مشفّر. سجل الجهاز تنظيمي وليس اقترانًا موثّقًا حتى تُضاف مصادقة جهاز صريحة.</p></div>
+          <div class="honesty-badge"><svg><use href="#i-users"/></svg> LOCAL A2A LEDGER</div>
+        </div>
+        <form class="panel organization-form" id="organization-form">
+          <div><label for="organization-name">اسم الفريق</label><input id="organization-name" name="name" required minlength="2" maxlength="120" placeholder="فريق المنتج الشخصي"></div>
+          <div class="grow"><label for="organization-mission">المهمة المشتركة</label><input id="organization-mission" name="mission" required minlength="3" maxlength="500" placeholder="خطط وابنِ وراجع الإصدار تحت سلطة القائد"></div>
+          <button type="submit" class="primary-button"><svg><use href="#i-users"/></svg> إنشاء فريق</button>
+        </form>
+        <div class="organization-legend panel"><span><i class="human"></i> HUMAN</span><span><i class="agent"></i> AGENT</span><span><i class="device"></i> DESKTOP / DEVICE</span><b>كل تسليم Agent2Agent يبقى داخل السجل المحلي حتى تركيب موصل صريح.</b></div>
+        <div class="organization-grid" id="organization-grid"></div>
+      </section>
+
+      <section class="view" id="view-schedules" data-view-section="schedules">
+        <div class="page-lead">
+          <div><span class="section-kicker">VISUAL WORKFLOWS · RECURRING GOALS</span><h1>سير العمل المتكرر</h1><p>أنشئ هدفًا دوريًا يمر دائمًا بمراحل PLAN → EXECUTE → REVIEW → SECURITY → APPROVAL → RELEASE → COMPLETE.</p></div>
+          <div class="honesty-badge"><svg><use href="#i-clock"/></svg> CATCH-UP WHILE APP RUNS</div>
+        </div>
+        <article class="panel visual-workflow-card">
+          <div class="workflow-node"><b>01</b><strong>PLAN</strong><small>Atlas</small></div><i></i><div class="workflow-node"><b>02</b><strong>EXECUTE</strong><small>Owner</small></div><i></i><div class="workflow-node"><b>03</b><strong>REVIEW</strong><small>Peer</small></div><i></i><div class="workflow-node"><b>04</b><strong>SECURITY</strong><small>Sentinel</small></div><i></i><div class="workflow-node sovereign"><b>05</b><strong>APPROVAL</strong><small>Commander</small></div><i></i><div class="workflow-node"><b>06</b><strong>RELEASE</strong><small>Local</small></div><i></i><div class="workflow-node"><b>07</b><strong>COMPLETE</strong><small>Athena</small></div>
+        </article>
+        <form class="panel schedule-form" id="schedule-form">
+          <div><label for="schedule-name">اسم سير العمل</label><input id="schedule-name" name="name" required minlength="2" maxlength="120" placeholder="موجز القيادة الصباحي"></div>
+          <div class="grow"><label for="schedule-goal">الهدف المتكرر</label><input id="schedule-goal" name="goal" required minlength="3" maxlength="500" placeholder="جهّز موجزًا يوميًا للمهام والمخاطر والقرارات"></div>
+          <div><label for="schedule-frequency">التكرار</label><select id="schedule-frequency" name="frequency"><option value="daily">يوميًا</option><option value="hourly">كل ساعة</option><option value="weekly">أسبوعيًا</option></select></div>
+          <button type="submit" class="primary-button"><svg><use href="#i-clock"/></svg> إنشاء معطّل</button>
+        </form>
+        <div class="schedule-grid" id="schedule-grid"></div>
+        <div class="native-surface-note amber"><svg><use href="#i-bell"/></svg><p><strong>حدود تشغيل الهاتف</strong><span>تعمل الجداول أثناء نشاط التطبيق وتلحق بالموعد الفائت عند عودته. لا ندّعي تنفيذًا خلفيًا دائمًا على iOS أو Android دون تكامل نظامي موقّع.</span></p></div>
+      </section>
+
       <section class="view" id="view-integrations" data-view-section="integrations">
         <div class="page-lead">
           <div><span class="section-kicker">SYSTEM LAYERS</span><h1>التكاملات</h1><p>كل أداة لها وظيفة واحدة. لا تظهر «متصلة» قبل تأكيد الاعتماد وفحص الصحة.</p></div>
@@ -359,6 +439,40 @@
       <div><strong id="vault-goal-count">0 أهداف مشفّرة</strong><span>تبقى البيانات داخل مساحة التطبيق الأصلية.</span></div>
       <button type="button" id="vault-lock-button"><svg><use href="#i-lock"/></svg>قفل الخزنة الآن</button>
     </div>
+  </dialog>
+
+  <dialog class="app-dialog provider-dialog" id="provider-dialog">
+    <button class="dialog-close" data-close-dialog aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <div class="provider-dialog-head"><div class="provider-dialog-mark">AI</div><div><span class="section-kicker">ENCRYPTED BYOK SETUP</span><h2 id="provider-dialog-name">Provider</h2><p id="provider-dialog-adapter"></p></div></div>
+    <form id="provider-form">
+      <label for="provider-endpoint">Endpoint</label>
+      <input id="provider-endpoint" type="url" required maxlength="1024" autocomplete="off" spellcheck="false">
+      <label for="provider-model">النموذج أو اسم Deployment</label>
+      <input id="provider-model" required maxlength="300" autocomplete="off" spellcheck="false">
+      <label for="provider-secret">API key / access token <small>اختياري للمزود المحلي</small></label>
+      <input id="provider-secret" type="password" maxlength="8192" autocomplete="new-password" placeholder="يُنقل مباشرةً إلى SQLCipher">
+      <small id="provider-secret-state" class="secure-field-note"></small>
+      <button type="submit" class="dialog-action">حفظ الإعداد مشفّرًا وإبقاءه معطّلًا</button>
+    </form>
+    <div class="provider-gate-list">
+      <div id="provider-permission-state"><i>1</i><p><strong>إذن القائد</strong><span>السماح الصريح باتصال هذا المزود فقط</span></p><button type="button" id="provider-grant" data-provider-action="permission">منح إذن صريح</button></div>
+      <div id="provider-health-state"><i>2</i><p><strong>فحص الصحة</strong><span>طلب شبكة حقيقي لقائمة النماذج دون استدلال</span></p><button type="button" data-provider-action="health">تشغيل الفحص</button></div>
+      <div id="provider-rollback-state"><i>3</i><p><strong>الرجوع</strong><span>إيقاف فوري وإمكانية حذف المفتاح</span></p><button type="button" id="provider-rollback" data-provider-action="rollback">تأكيد خطة الرجوع</button></div>
+    </div>
+    <small class="form-message" id="provider-message" role="alert"></small>
+    <div class="provider-final-actions"><button type="button" class="danger" data-provider-action="erase">حذف المفتاح</button><button type="button" id="provider-enable" data-provider-action="enable">تفعيل المزود</button></div>
+  </dialog>
+
+  <dialog class="app-dialog member-dialog" id="member-dialog">
+    <button class="dialog-close" data-close-dialog aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <span class="section-kicker">TEAM MEMBER</span><h2>إضافة عضو إلى <span id="member-team-name">الفريق</span></h2>
+    <form id="member-form">
+      <label for="member-type">نوع العضو</label><select id="member-type" name="memberType"><option value="agent">وكيل AI</option><option value="human">إنسان</option><option value="device">سطح مكتب / جهاز</option></select>
+      <label for="member-name">الاسم</label><input id="member-name" name="name" required minlength="2" maxlength="120" placeholder="FORGE أو جهاز المكتب">
+      <label for="member-role">الدور</label><input id="member-role" name="role" required minlength="2" maxlength="160" placeholder="التنفيذ أو المراجعة أو الموافقة">
+      <small class="form-message" id="member-message" role="alert"></small>
+      <button type="submit" class="dialog-action">إضافة إلى الفريق</button>
+    </form>
   </dialog>
 
   <dialog class="app-dialog authority-dialog" id="authority-dialog">

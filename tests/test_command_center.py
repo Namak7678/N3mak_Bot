@@ -119,14 +119,47 @@ class WorkforceEngineTests(unittest.TestCase):
         self.assertEqual(capability["windows"], ["main"])
 
         native_source = (root / "src-tauri" / "src" / "vault.rs").read_text()
+        runtime_source = (root / "src-tauri" / "src" / "runtime.rs").read_text()
         frontend = (root / "web" / "app.js").read_text()
         self.assertIn("bundled-sqlcipher-vendored-openssl", (root / "src-tauri" / "Cargo.toml").read_text())
         self.assertIn("permission_granted = 1 AND health_verified = 1 AND rollback_ready = 1", native_source)
         self.assertIn('nativeInvoke("unlock_vault"', frontend)
-        self.assertIn('nativeInvoke("create_goal"', frontend)
+        self.assertIn('nativeInvoke("native_state"', frontend)
+        self.assertIn('nativeInvoke("dispatch_command"', frontend)
         self.assertIn('nativeInvoke("lock_vault"', frontend)
+        self.assertIn("atlantis-local-a2a-v1", runtime_source)
+        self.assertIn("sanitize_import_payload", runtime_source)
+        self.assertIn("normalized_import_assets", runtime_source)
+        self.assertIn('"authenticated_pairing": false', runtime_source)
+        self.assertIn("sanitizeMigrationPayload", frontend)
+        self.assertIn("CREATE TABLE IF NOT EXISTS imported_assets", native_source)
         self.assertIn("pub initialized: bool", native_source)
+        self.assertIn("schema_version: 2", native_source)
         self.assertIn("vault-passphrase-confirm", (root / "web" / "index.html").read_text())
+
+    def test_native_management_catalog_is_default_deny_and_honest(self):
+        root = Path(__file__).resolve().parents[1]
+        catalog = json.loads((root / "config" / "providers.json").read_text())
+        self.assertGreaterEqual(len(catalog["providers"]), 15)
+        self.assertEqual(catalog["policy"]["default"], "disabled")
+        self.assertEqual(catalog["policy"]["credential_store"], "native_sqlcipher_only")
+        self.assertTrue(all(provider["status"] != "enabled" for provider in catalog["providers"]))
+        bedrock = next(provider for provider in catalog["providers"] if provider["id"] == "aws-bedrock")
+        self.assertFalse(bedrock["operational"])
+        self.assertEqual(bedrock["status"], "adapter_required")
+
+        html = (root / "web" / "index.html").read_text()
+        frontend = (root / "web" / "app.js").read_text()
+        for element_id in (
+            "provider-grid", "skill-form", "migration-file", "organization-form",
+            "schedule-form", "provider-dialog", "member-dialog",
+        ):
+            self.assertIn('id="{}"'.format(element_id), html)
+        for command in (
+            "configure_provider", "install_skill", "apply_migration", "create_team",
+            "add_team_member", "create_schedule",
+        ):
+            self.assertIn('nativeInvoke("{}"'.format(command), frontend)
 
     def test_task_status_update_is_auditable(self):
         created = self.engine.create_command("جهّز حملة تسويق جديدة")

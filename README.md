@@ -15,7 +15,8 @@
 - تخزين runtime انتقل من JSON إلى SQLite بمعاملات ذرية وWAL، مع استيراد تلقائي غير مدمر للحالة القديمة.
 - سجل قدرات `default-deny`: الأتمتة الخارجية متوقفة حتى تسجل موافقة صريحة وفحص صحة وخطة رجوع.
 - حماية اختيارية لكل Control API عبر `ATLANTISX_COMMANDER_KEY` ومفتاح Bearer محفوظ في جلسة المتصفح فقط.
-- مصدر Tauri 2 أصلي لسطح المكتب والموبايل مع إعداد أولي يؤكد عبارة المرور مرتين، واجهة فتح/قفل خزنة SQLCipher، أهداف مشفّرة، ومفتاح مشتق بـArgon2 يُصفّر عند القفل؛ يحتاج toolchain وتوقيع المنصة لإنتاج الحزم النهائية.
+- مصدر Tauri 2 أصلي لسطح المكتب والموبايل مع خزنة SQLCipher/Argon2، محرك الفريق الكامل، سجل تسليم Agent2Agent محلي، فرق البشر والوكلاء وهويات الأجهزة، مهارات `SKILL.md`، ترحيل مشفّر، وأهداف متكررة معطلة افتراضيًا.
+- كتالوج 22 مزود AI وواجهة BYOK أصلية؛ 21 تعريفًا يستخدم عائلات بروتوكول منفذة ويبقى غير مهيأ، بينما AWS Bedrock معلّم بوضوح كغير تشغيلي حتى إضافة AWS SigV4. التفعيل يتطلب الإذن وفحص صحة شبكيًا وخطة رجوع.
 
 > حالة التكاملات معروضة بصدق: GitHub متاح كمستودع محلي فقط، أما موفرو AI وNotion وAirtable وPostHog والنشر والأتمتة الخارجية فتبقى غير مفعلة حتى تضبط بيانات الاعتماد الآمنة وتجتاز بوابات القدرة.
 
@@ -73,6 +74,7 @@ node --check web/app.js
 python -m py_compile server.py
 python -m json.tool config/workforce.json >/dev/null
 python -m json.tool config/capabilities.json >/dev/null
+python -m json.tool config/providers.json >/dev/null
 python -m json.tool src-tauri/tauri.conf.json >/dev/null
 ```
 
@@ -89,8 +91,10 @@ web/
 config/
   workforce.json             سجل الموظفين والحالة الأساسية
   capabilities.json          سجل القدرات وبوابات التفعيل الثلاث
+  providers.json             كتالوج مزودي AI المعطل افتراضيًا
 src-tauri/
-  src/vault.rs               خزنة SQLCipher أصلية وArgon2
+  src/vault.rs               خزنة SQLCipher أصلية وArgon2 ومخطط البيانات
+  src/runtime.rs             سير العمل وA2A والمزودون والمهارات والترحيل والفرق والجداول
   tauri.conf.json            حزم Windows/macOS/Linux/Android/iOS
 server.py                    الخادم والمحرك وSQLite وPolicy Gate
 docs/

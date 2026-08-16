@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config" / "workforce.json"
 CAPABILITIES_PATH = ROOT / "config" / "capabilities.json"
+PROVIDERS_PATH = ROOT / "config" / "providers.json"
 RUNTIME_PATH = ROOT / ".atlantisx" / "atlantisx.db"
 LEGACY_RUNTIME_PATH = ROOT / ".atlantisx" / "runtime.json"
 WEB_PATH = ROOT / "web"
@@ -101,6 +102,7 @@ class WorkforceEngine:
         self._lock = threading.RLock()
         self._base = self._read_json(self.config_path)
         self._capabilities = self._read_json(self.capabilities_path)
+        self._providers = self._read_json(PROVIDERS_PATH)
 
     @staticmethod
     def _read_json(path: Path) -> Dict[str, Any]:
@@ -249,6 +251,11 @@ class WorkforceEngine:
         with self._lock:
             state = copy.deepcopy(self._base)
             state["capability_policy"] = copy.deepcopy(self._capabilities)
+            state["provider_registry"] = copy.deepcopy(self._providers)
+            state["skills"] = []
+            state["teams"] = []
+            state["schedules"] = []
+            state["imports"] = []
             runtime = self._load_runtime()
 
             for task in state.get("tasks", []):

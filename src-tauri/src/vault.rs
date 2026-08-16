@@ -25,6 +25,10 @@ pub enum VaultError {
     Locked,
     #[error("goal title must contain between 3 and 500 characters")]
     InvalidGoal,
+    #[error("invalid native operation: {0}")]
+    InvalidInput(String),
+    #[error("requested encrypted record was not found")]
+    NotFound,
     #[error("unable to access the application data directory: {0}")]
     AppData(String),
     #[error("vault filesystem operation failed: {0}")]
@@ -80,7 +84,7 @@ impl VaultManager {
             encrypted: true,
             unlocked: self.unlocked.lock().map(|state| state.is_some()).unwrap_or(false),
             initialized,
-            schema_version: 1,
+            schema_version: 2,
             external_automation_enabled: false,
         }
     }
@@ -101,15 +105,15 @@ impl VaultManager {
             .map_err(|error| VaultError::AppData(error.to_string()))?;
         fs::create_dir_all(&app_data)?;
         let salt = load_or_create_salt(&app_data.join("vault.salt"))?;
-        let key_hex = derive_key(passphrase, &salt)?;
+        let key_hex = Zeroizing::new(derive_key(passphrase, &salt)?);
         let database_path = app_data.join("atlantis-x-vault.db");
-        let connection = open_encrypted_connection(&database_path, &key_hex)?;
+        let connection = open_encrypted_connection(&database_path, key_hex.as_str())?;
         initialize_schema(&connection)?;
 
         let mut state = self.unlocked.lock().map_err(|_| VaultError::Locked)?;
         *state = Some(UnlockedVault {
             database_path,
-            key_hex: Zeroizing::new(key_hex),
+            key_hex,
         });
         drop(state);
         Ok(self.status(app))
@@ -166,7 +170,7 @@ impl VaultManager {
         })
     }
 
-    fn with_connection<T>(
+    pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, VaultError>,
     ) -> Result<T, VaultError> {
@@ -236,19 +240,133 @@ fn initialize_schema(connection: &Connection) -> Result<(), VaultError> {
             status TEXT NOT NULL CHECK(status IN ('queued','running','waiting_approval','completed','blocked')),
             created_at TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS schedules (
+        CREATE TABLE IF NOT EXISTS task_records (
             id TEXT PRIMARY KEY,
-            goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
-            schedule_expression TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
-            next_run_at TEXT
+            source_id TEXT,
+            title TEXT NOT NULL,
+            project TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            status TEXT NOT NULL,
+            workflow_stage TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            risk TEXT NOT NULL,
+            metadata TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS skills (
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_task_records_source_id
+            ON task_records(source_id) WHERE source_id IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS workflow_records (
+            task_id TEXT PRIMARY KEY REFERENCES task_records(id) ON DELETE CASCADE,
+            current_stage TEXT NOT NULL,
+            history TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS activity_records (
             id TEXT PRIMARY KEY,
+            event_type TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            title TEXT NOT NULL,
+            detail TEXT NOT NULL,
+            task_id TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS decision_records (
+            id TEXT PRIMARY KEY,
+            task_id TEXT,
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            status TEXT NOT NULL,
+            rationale TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            decided_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS provider_configs (
+            provider_id TEXT PRIMARY KEY,
+            enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+            permission_granted INTEGER NOT NULL DEFAULT 0 CHECK(permission_granted IN (0,1)),
+            health_verified INTEGER NOT NULL DEFAULT 0 CHECK(health_verified IN (0,1)),
+            rollback_ready INTEGER NOT NULL DEFAULT 0 CHECK(rollback_ready IN (0,1)),
+            endpoint TEXT NOT NULL DEFAULT '',
+            model TEXT NOT NULL DEFAULT '',
+            last_health_at TEXT,
+            updated_at TEXT NOT NULL,
+            CHECK(enabled = 0 OR (
+                permission_granted = 1 AND health_verified = 1 AND rollback_ready = 1
+            ))
+        );
+        CREATE TABLE IF NOT EXISTS provider_credentials (
+            provider_id TEXT PRIMARY KEY REFERENCES provider_configs(provider_id) ON DELETE CASCADE,
+            secret TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS installed_skills (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
             version TEXT NOT NULL,
+            description TEXT NOT NULL,
             manifest TEXT NOT NULL,
             enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
-            installed_at TEXT NOT NULL
+            installed_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS migration_imports (
+            id TEXT PRIMARY KEY,
+            source_name TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS imported_assets (
+            id TEXT PRIMARY KEY,
+            import_id TEXT NOT NULL REFERENCES migration_imports(id) ON DELETE CASCADE,
+            category TEXT NOT NULL CHECK(category IN ('agents','prompts','memories','skills','settings')),
+            source_key TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled = 0),
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_imported_assets_import_id
+            ON imported_assets(import_id, category);
+        CREATE TABLE IF NOT EXISTS teams (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            mission TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS team_members (
+            id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+            member_type TEXT NOT NULL CHECK(member_type IN ('agent','human','device')),
+            name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'registered_identity',
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS workflow_definitions (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            goal_template TEXT NOT NULL,
+            stages TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS recurring_workflows (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            goal_template TEXT NOT NULL,
+            frequency TEXT NOT NULL CHECK(frequency IN ('hourly','daily','weekly')),
+            enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+            next_run_at TEXT,
+            last_run_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS capability_grants (
             capability_id TEXT PRIMARY KEY,
@@ -267,8 +385,14 @@ fn initialize_schema(connection: &Connection) -> Result<(), VaultError> {
             payload TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
-        INSERT OR IGNORE INTO vault_metadata(key, value) VALUES('schema_version', '1');",
+        UPDATE team_members SET status='registered_identity' WHERE status='available';
+        INSERT OR IGNORE INTO vault_metadata(key, value) VALUES('schema_version', '2');
+        UPDATE vault_metadata SET value = '2' WHERE key = 'schema_version';",
     )?;
-    connection.query_row("SELECT value FROM vault_metadata WHERE key='schema_version'", [], |_| Ok(()))?;
+    connection.query_row(
+        "SELECT value FROM vault_metadata WHERE key='schema_version'",
+        [],
+        |_| Ok(()),
+    )?;
     Ok(())
 }

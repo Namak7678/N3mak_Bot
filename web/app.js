@@ -11,6 +11,9 @@ const AX = {
   installPrompt: null,
   nativeRuntime: false,
   vaultStatus: null,
+  selectedProvider: null,
+  selectedTeam: null,
+  pendingMigration: null,
   colors: {
     orion: { hex: "#42e8ca", rgb: "66,232,202" },
     athena: { hex: "#68c9f0", rgb: "104,201,240" },
@@ -157,6 +160,7 @@ function openNativeVault() {
 function closeNativeVault() {
   $("#vault-passphrase").value = "";
   $("#vault-passphrase-confirm").value = "";
+  if (AX.nativeRuntime && !AX.vaultStatus?.unlocked) return;
   $("#vault-message").textContent = "";
   $("#vault-dialog").close();
 }
@@ -169,14 +173,16 @@ async function unlockNativeVault(passphrase) {
   try {
     AX.vaultStatus = await nativeInvoke("unlock_vault", { passphrase });
     $("#vault-passphrase").value = "";
+    await loadState();
     await renderNativeVault();
-    toast("فُتحت خزنة SQLCipher لهذه الجلسة فقط.");
+    closeNativeVault();
+    toast("فُتحت خزنة SQLCipher وحُمّل محرك الفريق الأصلي.");
   } catch (error) {
     AX.vaultStatus = await nativeInvoke("vault_status").catch(() => ({
       unlocked: false,
       initialized: Boolean(AX.vaultStatus?.initialized),
       backend: "sqlcipher",
-      schema_version: 1
+      schema_version: 2
     }));
     await renderNativeVault();
     $("#vault-message").textContent = String(error);
@@ -192,14 +198,40 @@ async function unlockNativeVault(passphrase) {
 async function lockNativeVault() {
   try {
     AX.vaultStatus = await nativeInvoke("lock_vault");
-    await renderNativeVault();
-    toast("قُفلت الخزنة وأُزيل مفتاحها من الذاكرة.");
+    AX.state = null;
+    // Reload removes decrypted task/provider/team text from the DOM and JavaScript heap.
+    window.location.reload();
   } catch (error) {
     toast(String(error), "error");
   }
 }
 
+async function nativeApi(path, options = {}) {
+  if (!AX.vaultStatus?.unlocked) {
+    const error = new Error("افتح خزنة SQLCipher للوصول إلى محرك الفريق الأصلي.");
+    error.status = 423;
+    throw error;
+  }
+  const body = options.body ? JSON.parse(options.body) : {};
+  let match;
+  if (path === "/api/state") return nativeInvoke("native_state");
+  if (path === "/api/commands") return nativeInvoke("dispatch_command", { command: body.command, autorun: true });
+  if ((match = path.match(/^\/api\/tasks\/([^/]+)\/run$/))) {
+    return nativeInvoke("run_workflow_task", { taskId: decodeURIComponent(match[1]), mode: body.mode || "until_gate" });
+  }
+  if ((match = path.match(/^\/api\/tasks\/([^/]+)\/decision$/))) {
+    return nativeInvoke("decide_workflow_task", {
+      taskId: decodeURIComponent(match[1]), decision: body.decision, note: body.note || ""
+    });
+  }
+  if ((match = path.match(/^\/api\/tasks\/([^/]+)\/status$/))) {
+    return nativeInvoke("set_task_status", { taskId: decodeURIComponent(match[1]), status: body.status });
+  }
+  throw new Error(`المسار الأصلي غير مدعوم: ${path}`);
+}
+
 async function api(path, options = {}) {
+  if (AX.nativeRuntime) return nativeApi(path, options);
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (AX.commanderKey) headers.Authorization = `Bearer ${AX.commanderKey}`;
   const response = await fetch(path, { ...options, headers });
@@ -232,6 +264,10 @@ function renderAll() {
   renderRuntime();
   renderIntelligence();
   renderIntegrations();
+  renderProviders();
+  renderSkillsAndImports();
+  renderOrganizations();
+  renderSchedules();
   renderBrief();
 }
 
@@ -539,6 +575,306 @@ function renderIntegrations() {
     </article>`).join("");
 }
 
+function nativeFeatureReady() {
+  if (!AX.nativeRuntime) {
+    toast("هذه العملية متاحة داخل تطبيق Atlantis-X الأصلي فقط؛ العرض الحالي يبقى للمعاينة.", "error");
+    return false;
+  }
+  if (!AX.vaultStatus?.unlocked) {
+    openNativeVault();
+    return false;
+  }
+  return true;
+}
+
+function providerCatalog() {
+  return AX.state?.provider_registry?.providers || [];
+}
+
+function renderProviders() {
+  const grid = $("#provider-grid");
+  if (!grid || !AX.state) return;
+  const providers = providerCatalog();
+  $("#provider-count").textContent = `${providers.length} PROVIDERS`;
+  grid.innerHTML = providers.map(provider => {
+    const gates = [provider.permission_granted, provider.health_verified, provider.rollback_ready];
+    const gateCount = gates.filter(Boolean).length;
+    const operational = provider.operational !== false;
+    const stateLabel = !operational ? "يتطلب محولًا أصليًا" : provider.enabled ? "مفعّل" : provider.health_verified ? "تم التحقق · متوقف" : provider.credential_stored ? "محفوظ · متوقف" : "غير مهيأ";
+    return `<article class="provider-card panel ${provider.enabled ? "enabled" : ""} ${operational ? "" : "unavailable"}">
+      <div class="provider-card-head"><div class="provider-monogram">${escapeHTML(provider.name.slice(0, 2).toUpperCase())}</div><span class="provider-state ${escapeHTML(provider.status || "unconfigured")}"><i></i>${stateLabel}</span></div>
+      <h2>${escapeHTML(provider.name)}</h2><p>${escapeHTML(provider.adapter)} · ${provider.local ? "LOCAL" : "HOSTED"}</p>
+      <div class="provider-model"><small>MODEL</small><strong>${escapeHTML(provider.model || provider.default_model || "يُحدد عند الإعداد")}</strong></div>
+      <div class="provider-gates" aria-label="بوابات التفعيل"><i class="${provider.permission_granted ? "done" : ""}" title="إذن صريح"></i><i class="${provider.health_verified ? "done" : ""}" title="فحص صحة"></i><i class="${provider.rollback_ready ? "done" : ""}" title="رجوع جاهز"></i><span>${gateCount}/3 GATES</span></div>
+      <button type="button" ${operational ? `data-provider-open="${escapeHTML(provider.id)}"` : "disabled"}>${operational ? (provider.credential_stored ? "إدارة الربط الآمن" : "إعداد BYOK") : "غير متاح حتى تنفيذ البروتوكول"}</button>
+    </article>`;
+  }).join("");
+}
+
+function openProviderSetup(providerId) {
+  const provider = providerCatalog().find(item => item.id === providerId);
+  if (!provider) return;
+  AX.selectedProvider = providerId;
+  $("#provider-dialog-name").textContent = provider.name;
+  $("#provider-dialog-adapter").textContent = `${provider.adapter} · ${provider.local ? "LOCAL ENDPOINT" : "HOSTED API"}`;
+  $("#provider-endpoint").value = provider.endpoint || provider.base_url || "";
+  $("#provider-model").value = provider.model || provider.default_model || "";
+  $("#provider-secret").value = "";
+  $("#provider-secret-state").textContent = provider.credential_stored ? "مفتاح محفوظ داخل SQLCipher — اترك الحقل فارغًا للاحتفاظ به." : "لم يُحفظ مفتاح بعد.";
+  $("#provider-permission-state").classList.toggle("done", Boolean(provider.permission_granted));
+  $("#provider-health-state").classList.toggle("done", Boolean(provider.health_verified));
+  $("#provider-rollback-state").classList.toggle("done", Boolean(provider.rollback_ready));
+  $("#provider-grant").textContent = provider.permission_granted ? "سحب الإذن" : "منح إذن صريح";
+  $("#provider-rollback").textContent = provider.rollback_ready ? "إلغاء جاهزية الرجوع" : "تأكيد خطة الرجوع";
+  $("#provider-enable").textContent = provider.enabled ? "إيقاف المزود" : "تفعيل المزود";
+  $("#provider-enable").classList.toggle("active", Boolean(provider.enabled));
+  $("#provider-enable").disabled = !provider.enabled && !(provider.permission_granted && provider.health_verified && provider.rollback_ready);
+  $("#provider-message").textContent = AX.nativeRuntime ? "" : "المعاينة لا تحفظ مفاتيح. افتح النسخة الأصلية لإعداد المزود.";
+  const dialog = $("#provider-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+async function refreshNativeState(message = "") {
+  await loadState();
+  if (message) toast(message);
+}
+
+async function configureSelectedProvider(form) {
+  if (!nativeFeatureReady() || !AX.selectedProvider) return;
+  const submit = form.querySelector("button[type=submit]");
+  submit.disabled = true;
+  try {
+    await nativeInvoke("configure_provider", {
+      providerId: AX.selectedProvider,
+      endpoint: $("#provider-endpoint").value.trim(),
+      model: $("#provider-model").value.trim(),
+      secret: $("#provider-secret").value || null
+    });
+    $("#provider-secret").value = "";
+    await refreshNativeState("حُفظ إعداد المزود مشفّرًا، وبقي معطّلًا حتى اكتمال البوابات.");
+    openProviderSetup(AX.selectedProvider);
+  } catch (error) {
+    $("#provider-message").textContent = String(error);
+  } finally { submit.disabled = false; }
+}
+
+async function providerAction(action) {
+  if (!nativeFeatureReady() || !AX.selectedProvider) return;
+  const provider = providerCatalog().find(item => item.id === AX.selectedProvider);
+  const commands = {
+    permission: ["set_provider_permission", { providerId: AX.selectedProvider, granted: !provider.permission_granted }],
+    rollback: ["set_provider_rollback", { providerId: AX.selectedProvider, ready: !provider.rollback_ready }],
+    health: ["verify_provider_health", { providerId: AX.selectedProvider }],
+    enable: ["set_provider_enabled", { providerId: AX.selectedProvider, enabled: !provider.enabled }],
+    erase: ["erase_provider_credential", { providerId: AX.selectedProvider }]
+  };
+  const selected = commands[action];
+  if (!selected) return;
+  if (action === "erase" && !window.confirm("سيُحذف المفتاح المشفّر ويُوقف المزود. هل أنت متأكد؟")) return;
+  $("#provider-message").textContent = action === "health" ? "جارٍ تنفيذ فحص شبكة حقيقي دون توليد نص…" : "";
+  try {
+    await nativeInvoke(selected[0], selected[1]);
+    await loadState();
+    openProviderSetup(AX.selectedProvider);
+    toast(action === "health" ? "نجح فحص صحة المزود وسُجل توقيته." : "حُدثت بوابة المزود وسُجل التغيير.");
+  } catch (error) {
+    $("#provider-message").textContent = String(error);
+  }
+}
+
+function renderSkillsAndImports() {
+  if (!AX.state) return;
+  const skills = AX.state.skills || [];
+  const skillsGrid = $("#skills-grid");
+  if (skillsGrid) skillsGrid.innerHTML = skills.length ? skills.map(skill => `
+    <article class="asset-card panel"><div><span class="asset-kind">SKILL.md</span><i class="asset-state ${skill.enabled ? "enabled" : ""}"></i></div><h3>${escapeHTML(skill.name)}</h3><p>${escapeHTML(skill.description)}</p><small>${escapeHTML(skill.id)} · v${escapeHTML(skill.version)}</small><div class="asset-actions"><button data-skill-toggle="${escapeHTML(skill.id)}" data-enabled="${skill.enabled}">${skill.enabled ? "تعطيل" : "تفعيل"}</button><button class="danger" data-skill-remove="${escapeHTML(skill.id)}">إزالة</button></div></article>`).join("") : `<div class="empty-state wide">لا توجد مهارات مثبتة. الصق SKILL.md أو اختر ملفًا من جهازك.</div>`;
+  const imports = AX.state.imports || [];
+  const history = $("#import-history");
+  if (history) history.innerHTML = imports.length ? imports.map(item => `<div class="import-row"><div><strong>${escapeHTML(item.source_name)}</strong><span>${escapeHTML(item.source_kind)}</span></div><time>${new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.created_at))}</time></div>`).join("") : `<div class="empty-state">لم تُطبّق أي حزمة ترحيل.</div>`;
+}
+
+async function installSkillFromForm() {
+  if (!nativeFeatureReady()) return;
+  const content = $("#skill-content").value;
+  try {
+    await nativeInvoke("install_skill", { content });
+    $("#skill-content").value = "";
+    $("#skill-file").value = "";
+    await refreshNativeState("ثُبتت المهارة داخل الخزنة وهي معطّلة حتى تمنحها الإذن.");
+  } catch (error) { toast(String(error), "error"); }
+}
+
+async function skillAction(skillId, action, enabled = false) {
+  if (!nativeFeatureReady()) return;
+  try {
+    if (action === "remove") {
+      if (!window.confirm("إزالة هذه المهارة من الخزنة؟")) return;
+      await nativeInvoke("remove_skill", { skillId });
+    } else {
+      await nativeInvoke("set_skill_enabled", { skillId, enabled: !enabled });
+    }
+    await refreshNativeState(action === "remove" ? "أزيلت المهارة." : "حُدّث إذن المهارة.");
+  } catch (error) { toast(String(error), "error"); }
+}
+
+function sensitiveMigrationKey(key) {
+  const normalized = String(key).toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  const exact = new Set([
+    "key", "api_key", "apikey", "token", "access_token", "refresh_token", "id_token",
+    "secret", "client_secret", "password", "passphrase", "credential", "credentials",
+    "private_key", "privatekey", "access_key", "secret_access_key", "authorization",
+    "bearer", "cookie", "session_token", "signing_key", "ssh_key"
+  ]);
+  return exact.has(normalized) || [
+    "_api_key", "_token", "_secret", "_password", "_credential", "_private_key",
+    "_access_key", "_signing_key"
+  ].some(suffix => normalized.endsWith(suffix));
+}
+
+function sanitizeMigrationValue(value) {
+  if (Array.isArray(value)) return value.map(sanitizeMigrationValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !sensitiveMigrationKey(key))
+    .map(([key, nested]) => [key, sanitizeMigrationValue(nested)]));
+}
+
+function sanitizeMigrationPayload(payload) {
+  if (!payload || Array.isArray(payload) || typeof payload !== "object") throw new Error("الحزمة يجب أن تكون كائن JSON.");
+  return Object.fromEntries(["agents", "prompts", "memories", "skills", "settings"]
+    .filter(key => Object.hasOwn(payload, key))
+    .map(key => [key, sanitizeMigrationValue(payload[key])]));
+}
+
+async function readMigrationFile(file) {
+  if (!file) return;
+  try {
+    if (file.size > 5 * 1024 * 1024) throw new Error("الحد الأقصى لحزمة الترحيل هو 5 MiB.");
+    const raw = await file.text();
+    if (new TextEncoder().encode(raw).byteLength > 5 * 1024 * 1024) throw new Error("الحد الأقصى لحزمة الترحيل هو 5 MiB.");
+    const payload = sanitizeMigrationPayload(JSON.parse(raw));
+    const preview = AX.nativeRuntime
+      ? await nativeInvoke("preview_migration", { payload, sourceName: file.name })
+      : localMigrationPreview(payload, file.name);
+    AX.pendingMigration = { payload, sourceName: file.name, preview };
+    $("#migration-preview").innerHTML = `<strong>${escapeHTML(file.name)}</strong><p>${Object.entries(preview.counts).map(([key, count]) => `${escapeHTML(key)}: ${count}`).join(" · ")}</p><small>${preview.total} عناصر · لن تُستورد مفاتيح المزودين · الأتمتة تبقى معطلة</small>`;
+    $("#migration-apply").disabled = !AX.nativeRuntime;
+  } catch (error) {
+    AX.pendingMigration = null;
+    $("#migration-preview").innerHTML = `<span class="form-message">${escapeHTML(String(error))}</span>`;
+    $("#migration-apply").disabled = true;
+  }
+}
+
+function localMigrationPreview(payload, sourceName) {
+  if (!payload || Array.isArray(payload) || typeof payload !== "object") throw new Error("الحزمة يجب أن تكون كائن JSON.");
+  const counts = {};
+  ["agents", "prompts", "memories", "skills", "settings"].forEach(key => {
+    const value = payload[key];
+    counts[key] = Array.isArray(value) ? value.length : value && typeof value === "object" ? Object.keys(value).length : value == null ? 0 : 1;
+  });
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  if (!total) throw new Error("لا تحتوي الحزمة على عناصر مدعومة.");
+  return { source_name: sourceName, counts, total };
+}
+
+async function applyMigration() {
+  if (!nativeFeatureReady() || !AX.pendingMigration) return;
+  try {
+    await nativeInvoke("apply_migration", {
+      payload: AX.pendingMigration.payload,
+      sourceName: AX.pendingMigration.sourceName
+    });
+    AX.pendingMigration = null;
+    $("#migration-file").value = "";
+    $("#migration-preview").innerHTML = "";
+    $("#migration-apply").disabled = true;
+    await refreshNativeState("حُفظت السجلات المدعومة مرحليًا داخل SQLCipher بعد حذف حقول الأسرار، وبقيت معطّلة.");
+  } catch (error) { toast(String(error), "error"); }
+}
+
+function renderOrganizations() {
+  const grid = $("#organization-grid");
+  if (!grid || !AX.state) return;
+  const teams = AX.state.teams || [];
+  grid.innerHTML = teams.length ? teams.map(team => `
+    <article class="organization-card panel ${team.enabled ? "" : "disabled"}"><div class="organization-head"><div><span>DEVICE + AGENT + HUMAN</span><h2>${escapeHTML(team.name)}</h2></div><button data-team-toggle="${escapeHTML(team.id)}" data-enabled="${team.enabled}">${team.enabled ? "إيقاف" : "تشغيل"}</button></div><p>${escapeHTML(team.mission)}</p><div class="member-stack">${team.members.length ? team.members.map(member => `<span class="member-chip ${escapeHTML(member.member_type)}"><i>${escapeHTML(member.name.slice(0, 2))}</i><b>${escapeHTML(member.name)}</b><small>${escapeHTML(member.role)} · ${escapeHTML(member.member_type)} · ${member.member_type === "device" ? "هوية مسجلة غير مقترنة" : "هوية مسجلة"}</small></span>`).join("") : `<small>لا أعضاء بعد</small>`}</div><button class="add-member" data-team-member="${escapeHTML(team.id)}">+ إضافة إنسان أو وكيل أو جهاز</button></article>`).join("") : `<div class="empty-state wide">أنشئ أول فريق يربط البشر والوكلاء وأجهزة سطح المكتب تحت مهمة واحدة.</div>`;
+}
+
+async function createOrganization(form) {
+  if (!nativeFeatureReady()) return;
+  try {
+    await nativeInvoke("create_team", { name: form.elements.name.value, mission: form.elements.mission.value });
+    form.reset();
+    await refreshNativeState("أُنشئ الفريق المشفّر وأصبح جاهزًا لإضافة الأعضاء.");
+  } catch (error) { toast(String(error), "error"); }
+}
+
+function openMemberDialog(teamId) {
+  AX.selectedTeam = teamId;
+  const team = (AX.state.teams || []).find(item => item.id === teamId);
+  $("#member-team-name").textContent = team?.name || "الفريق";
+  $("#member-form").reset();
+  $("#member-dialog").showModal();
+}
+
+async function addOrganizationMember(form) {
+  if (!nativeFeatureReady() || !AX.selectedTeam) return;
+  try {
+    await nativeInvoke("add_team_member", {
+      teamId: AX.selectedTeam,
+      memberType: form.elements.memberType.value,
+      name: form.elements.name.value,
+      role: form.elements.role.value
+    });
+    $("#member-dialog").close();
+    await refreshNativeState("أُضيف العضو إلى الفريق وسُجل نوعه ودوره.");
+  } catch (error) { $("#member-message").textContent = String(error); }
+}
+
+async function toggleOrganization(teamId, enabled) {
+  if (!nativeFeatureReady()) return;
+  try {
+    await nativeInvoke("set_team_enabled", { teamId, enabled: !enabled });
+    await refreshNativeState("حُدثت حالة الفريق.");
+  } catch (error) { toast(String(error), "error"); }
+}
+
+function renderSchedules() {
+  const grid = $("#schedule-grid");
+  if (!grid || !AX.state) return;
+  const schedules = AX.state.schedules || [];
+  const frequency = { hourly: "كل ساعة", daily: "يوميًا", weekly: "أسبوعيًا" };
+  grid.innerHTML = schedules.length ? schedules.map(schedule => `
+    <article class="schedule-card panel ${schedule.enabled ? "enabled" : ""}"><div class="schedule-orb">${icon("clock")}</div><div class="schedule-copy"><span>${frequency[schedule.frequency] || escapeHTML(schedule.frequency)}</span><h3>${escapeHTML(schedule.name)}</h3><p>${escapeHTML(schedule.goal_template)}</p><small>التشغيل التالي: ${schedule.next_run_at ? new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium", timeStyle: "short" }).format(new Date(schedule.next_run_at)) : "غير مجدول"}</small></div><div class="schedule-actions"><button data-schedule-toggle="${escapeHTML(schedule.id)}" data-enabled="${schedule.enabled}">${schedule.enabled ? "إيقاف" : "تشغيل"}</button><button class="danger" data-schedule-delete="${escapeHTML(schedule.id)}">حذف</button></div></article>`).join("") : `<div class="empty-state wide">لا توجد أهداف متكررة. أنشئ جدولًا وسيبقى متوقفًا حتى تفعّله صراحةً.</div>`;
+}
+
+async function createRecurringSchedule(form) {
+  if (!nativeFeatureReady()) return;
+  try {
+    await nativeInvoke("create_schedule", {
+      name: form.elements.name.value,
+      goalTemplate: form.elements.goal.value,
+      frequency: form.elements.frequency.value
+    });
+    form.reset();
+    await refreshNativeState("أُنشئ الجدول معطّلًا. راجعه ثم فعّله عندما تكون مستعدًا.");
+  } catch (error) { toast(String(error), "error"); }
+}
+
+async function scheduleAction(scheduleId, action, enabled = false) {
+  if (!nativeFeatureReady()) return;
+  try {
+    if (action === "delete") {
+      if (!window.confirm("حذف هذا الجدول المتكرر؟")) return;
+      await nativeInvoke("delete_schedule", { scheduleId });
+    } else {
+      await nativeInvoke("set_schedule_enabled", { scheduleId, enabled: !enabled });
+    }
+    await refreshNativeState(action === "delete" ? "حُذف الجدول." : "حُدث تشغيل الجدول.");
+  } catch (error) { toast(String(error), "error"); }
+}
+
 function renderBrief() {
   if (!AX.state) return;
   const urgent = AX.state.tasks.filter(task => task.priority === "critical" && task.status !== "completed");
@@ -648,17 +984,9 @@ async function submitCommand(command) {
   submit.disabled = true;
   submit.querySelector("span").textContent = "Orion يحلّل…";
   try {
-    if (AX.nativeRuntime) {
-      if (!AX.vaultStatus?.unlocked) {
-        openNativeVault();
-        throw new Error("افتح الخزنة المشفّرة أولًا لحفظ الهدف الأصلي.");
-      }
-      const goal = await nativeInvoke("create_goal", { title: command });
-      $("#command-input").value = "";
-      autoGrow($("#command-input"));
-      await renderNativeVault();
-      toast(`حُفظ الهدف ${goal.id.slice(0, 8)} داخل خزنة SQLCipher.`);
-      return;
+    if (AX.nativeRuntime && !AX.vaultStatus?.unlocked) {
+      openNativeVault();
+      throw new Error("افتح الخزنة المشفّرة أولًا لتشغيل الهدف.");
     }
     const result = await api("/api/commands", { method: "POST", body: JSON.stringify({ command }) });
     await loadState();
@@ -842,6 +1170,26 @@ function bindEvents() {
     const integration = event.target.closest("[data-integration]");
     if (integration) toast("الربط يحتاج Adapter وبيانات اعتماد آمنة خارج المستودع — لم يتم تفعيله.");
 
+    const providerOpen = event.target.closest("[data-provider-open]");
+    if (providerOpen) openProviderSetup(providerOpen.dataset.providerOpen);
+    const providerActionButton = event.target.closest("[data-provider-action]");
+    if (providerActionButton) providerAction(providerActionButton.dataset.providerAction);
+
+    const skillToggle = event.target.closest("[data-skill-toggle]");
+    if (skillToggle) skillAction(skillToggle.dataset.skillToggle, "toggle", skillToggle.dataset.enabled === "true");
+    const skillRemove = event.target.closest("[data-skill-remove]");
+    if (skillRemove) skillAction(skillRemove.dataset.skillRemove, "remove");
+
+    const teamMember = event.target.closest("[data-team-member]");
+    if (teamMember) openMemberDialog(teamMember.dataset.teamMember);
+    const teamToggle = event.target.closest("[data-team-toggle]");
+    if (teamToggle) toggleOrganization(teamToggle.dataset.teamToggle, teamToggle.dataset.enabled === "true");
+
+    const scheduleToggle = event.target.closest("[data-schedule-toggle]");
+    if (scheduleToggle) scheduleAction(scheduleToggle.dataset.scheduleToggle, "toggle", scheduleToggle.dataset.enabled === "true");
+    const scheduleDelete = event.target.closest("[data-schedule-delete]");
+    if (scheduleDelete) scheduleAction(scheduleDelete.dataset.scheduleDelete, "delete");
+
     const mapPoint = event.target.closest("[data-country]");
     if (mapPoint) toast(`تم تحديد ${mapPoint.dataset.country} في نطاق المتابعة الاستخبارية.`);
 
@@ -875,6 +1223,17 @@ function bindEvents() {
   });
 
   $("#command-form").addEventListener("submit", event => { event.preventDefault(); submitCommand($("#command-input").value); });
+  $("#provider-form").addEventListener("submit", event => { event.preventDefault(); configureSelectedProvider(event.currentTarget); });
+  $("#skill-form").addEventListener("submit", event => { event.preventDefault(); installSkillFromForm(); });
+  $("#skill-file").addEventListener("change", async event => {
+    const file = event.target.files[0];
+    if (file) $("#skill-content").value = await file.text();
+  });
+  $("#migration-file").addEventListener("change", event => readMigrationFile(event.target.files[0]));
+  $("#migration-apply").addEventListener("click", applyMigration);
+  $("#organization-form").addEventListener("submit", event => { event.preventDefault(); createOrganization(event.currentTarget); });
+  $("#member-form").addEventListener("submit", event => { event.preventDefault(); addOrganizationMember(event.currentTarget); });
+  $("#schedule-form").addEventListener("submit", event => { event.preventDefault(); createRecurringSchedule(event.currentTarget); });
   $("#authority-form").addEventListener("submit", event => {
     event.preventDefault();
     authorizeCommander($("#authority-key").value.trim());
@@ -942,12 +1301,18 @@ function bindEvents() {
     event.preventDefault();
     closeNativeVault();
   });
-  $$("dialog").forEach(dialog => dialog.addEventListener("click", event => {
-    if (event.target !== dialog || dialog.id === "authority-dialog") return;
-    if (dialog.id === "sovereign-dialog") closeSovereignDecision();
-    else if (dialog.id === "vault-dialog") closeNativeVault();
-    else dialog.close();
-  }));
+  $$("dialog").forEach(dialog => {
+    dialog.addEventListener("click", event => {
+      if (event.target !== dialog || dialog.id === "authority-dialog") return;
+      if (dialog.id === "sovereign-dialog") closeSovereignDecision();
+      else if (dialog.id === "vault-dialog") closeNativeVault();
+      else dialog.close();
+    });
+    dialog.addEventListener("close", () => {
+      if (dialog.id === "provider-dialog") $("#provider-secret").value = "";
+      if (dialog.id === "member-dialog") $("#member-message").textContent = "";
+    });
+  });
 }
 
 function focusCommand() {
@@ -962,8 +1327,10 @@ async function init() {
   storeCommanderKey(readCommanderKey());
   const initialHash = location.hash.replace("#", "");
   try {
-    await loadState();
-    if (initialHash) setView(initialHash);
+    if (!AX.nativeRuntime || AX.vaultStatus?.unlocked) {
+      await loadState();
+      if (initialHash) setView(initialHash);
+    }
   } catch (error) {
     console.error(error);
     if (error.status !== 401) toast(AX.nativeRuntime

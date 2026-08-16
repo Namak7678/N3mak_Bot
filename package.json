@@ -1,0 +1,19 @@
+{
+  "name": "atlantis-x",
+  "private": true,
+  "version": "2.4.0",
+  "description": "Local-first personal AI agent and multi-agent Command Center",
+  "scripts": {
+    "native:info": "tauri info",
+    "native:icons": "tauri icon web/assets/icons/atlantis-x-master.png --ios-color '#060a0f'",
+    "native:dev": "tauri dev",
+    "native:build": "tauri build",
+    "native:android:init": "tauri android init",
+    "native:android:build": "tauri android build",
+    "native:ios:init": "tauri ios init",
+    "native:ios:build": "tauri ios build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  }
+}

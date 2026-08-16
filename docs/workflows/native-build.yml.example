@@ -1,0 +1,189 @@
+# Owner-installable template: copy this file to
+# .github/workflows/native-build.yml using an account or GitHub App with
+# permission to create/update Actions workflows. It performs unsigned or
+# development-only verification builds and reads no signing secrets.
+name: Native build verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - "arena/**"
+    paths:
+      - ".github/workflows/native-build.yml"
+      - "src-tauri/**"
+      - "web/**"
+      - "package.json"
+      - "package-lock.json"
+      - "rust-toolchain.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  source-validation:
+    name: Source and policy validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Validate web runtime and policies
+        run: |
+          python -m py_compile server.py cto_agent.py
+          python -m unittest discover -s tests -v
+          cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+          node --check web/app.js
+          node --check web/service-worker.js
+          for file in config/workforce.json config/capabilities.json config/providers.json src-tauri/tauri.conf.json package.json package-lock.json web/manifest.webmanifest; do
+            python -m json.tool "$file" >/dev/null
+          done
+      - name: Install pinned RustSec auditor
+        run: cargo install cargo-audit --version 0.22.2 --locked --no-default-features
+      - name: Audit committed Rust lockfile
+        run: cargo audit --file src-tauri/Cargo.lock
+      - name: Report Tauri environment
+        run: npm run native:info
+
+  desktop:
+    name: Desktop ${{ matrix.name }}
+    needs: source-validation
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-24.04
+            bundles: deb,appimage
+            artifact: linux
+          - name: Windows
+            os: windows-latest
+            bundles: nsis,msi
+            artifact: windows
+          - name: macOS
+            os: macos-latest
+            bundles: app,dmg
+            artifact: macos
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - name: Install Linux Tauri prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential curl wget file libssl-dev libgtk-3-dev \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+      - name: Lint locked Rust graph
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Test locked Rust graph
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Build locked native bundles without production signing
+        run: npm run native:build -- --ci --no-sign --bundles ${{ matrix.bundles }} -- --locked
+      - name: Upload unsigned verification bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlantis-x-${{ matrix.artifact }}-unsigned-${{ github.sha }}
+          path: src-tauri/target/release/bundle/**/*
+          if-no-files-found: error
+          retention-days: 14
+
+  android-debug:
+    name: Android debug APK
+    needs: source-validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Install Android SDK and NDK
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973"
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Generate Android project
+        run: npx tauri android init --ci
+      - name: Build development-signed debug APK from the locked graph
+        run: npx tauri android build --ci --debug --apk -- --locked
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlantis-x-android-debug-${{ github.sha }}
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    name: iOS simulator verification
+    needs: source-validation
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Generate iOS project
+        run: npx tauri ios init --ci
+      - name: Build iOS simulator application from the locked graph
+        run: npx tauri ios build --ci --debug --target aarch64-sim -- --locked
+      - name: Upload iOS simulator application
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlantis-x-ios-simulator-${{ github.sha }}
+          path: src-tauri/gen/apple/build/**/*.app
+          if-no-files-found: warn
+          retention-days: 14

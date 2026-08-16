@@ -33,7 +33,11 @@ This native source is deliberately separate from the development web server's un
 
 The source package metadata is reconciled at **2.4.0**, and native state identifies the engine as `2.4.0-native`. These values describe the source revision only; they are not evidence of compilation, signing, installation, or target-device verification.
 
-The Rust source has not been compiled in this repository environment because Rust and the platform GUI SDKs are unavailable here. Dependency installation and `npm run native:info` do work with the pinned Tauri CLI 2.11.4; the diagnostic explicitly reports missing `rustc`, Cargo, `webkit2gtk-4.1`, and `rsvg2`. A direct `npm run native:build` attempt stops before compilation when Tauri cannot run `cargo metadata`. Android and Apple SDK/signing tools are also absent. It must pass compilation and target-device validation before it is described as a distributable native application.
+The Rust source has not been compiled in this repository environment. The host has no system Rust installation or platform GUI SDKs, and the standard Rustup and Debian package routes are unreachable. `npm run native:info` works with the pinned Tauri CLI 2.11.4 but reports missing `rustc`, Cargo, `webkit2gtk-4.1`, and `rsvg2`; the first direct `npm run native:build` attempt therefore stopped before compilation at `cargo metadata`.
+
+A later diagnostic assembled temporary Rust 1.88.0 components from npm-carried component archives whose registry integrity was verified. This made genuine `cargo fmt` validation possible: the native tree was normalized and now passes `cargo fmt --all -- --check`. Cargo reached the official crates.io Git index through GitHub, resolved 474 dependencies, and generated the committed `src-tauri/Cargo.lock`; an offline repeat produced the identical lockfile (SHA-256 `1db313163175d645ac3bb302212e4cce283bc03638edc2ffadd902a374b956ca`). The resolved graph declares Rust 1.88.0 as its highest minimum, so `rust-toolchain.toml`, `Cargo.toml`, and CI are pinned consistently. A locked Tauri build then accepted the CI/no-sign/bundle arguments and reached Cargo, but stopped before compilation at the first unavailable archive, `adler2 v2.0.1`. Full metadata/type-check/build still cannot finish locally because crate archives on `static.crates.io` and all tested mirrors fail TLS, while the Linux WebKit/indicator libraries remain unavailable. Android and Apple SDK/signing tools are also absent. These formatting and dependency-resolution checks are real progress, but they are not compilation or target-device evidence.
+
+A preliminary version screen of the lockfile against the current RustSec advisory database found no vulnerability-class version match, but did identify 17 informational findings: one `glib 0.18.5` unsoundness advisory and 16 unmaintained-crate advisories in transitive GTK3, `proc-macro-error`, and UNIC packages. This targeted local screen is not a substitute for `cargo audit`, reachability analysis, or code review. The CI template therefore installs pinned `cargo-audit 0.22.2`: vulnerability advisories fail validation, informational findings stay visible for explicit maintainer review, and none are silently ignored. Production native release remains blocked until that review is complete.
 
 ## Owner-installable native verification workflow
 
@@ -66,15 +70,15 @@ These credentials must be held in the release platform's encrypted secret store.
 
 ## Maintainer build preparation
 
-The repository pins the Tauri CLI through `package-lock.json`. Maintainer commands—not end-user installation steps—are:
+The repository pins Rust 1.88.0 through `rust-toolchain.toml`, the resolved Rust graph through `src-tauri/Cargo.lock`, and the Tauri CLI through `package-lock.json`. Maintainer commands—not end-user installation steps—are:
 
 ```text
 npm ci
-npm run native:build
-npm run native:android:init
-npm run native:android:build
-npm run native:ios:init
-npm run native:ios:build
+npm run native:build -- -- --locked
+npm run native:android:init -- --ci
+npm run native:android:build -- --ci -- --locked
+npm run native:ios:init -- --ci
+npm run native:ios:build -- --ci -- --locked
 ```
 
 Android initialization/build must run on a machine with the Android SDK and NDK. iOS initialization/build must run on macOS. A release workflow should publish checksums and signatures alongside every artifact.

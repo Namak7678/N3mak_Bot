@@ -19,6 +19,7 @@ on:
       - "web/**"
       - "package.json"
       - "package-lock.json"
+      - "rust-toolchain.toml"
 
 permissions:
   contents: read
@@ -34,7 +35,7 @@ jobs:
   source-validation:
     name: Source and policy validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,17 +45,25 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt
       - name: Install locked JavaScript dependencies
         run: npm ci
       - name: Validate web runtime and policies
         run: |
           python -m py_compile server.py cto_agent.py
           python -m unittest discover -s tests -v
+          cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
           node --check web/app.js
           node --check web/service-worker.js
           for file in config/workforce.json config/capabilities.json config/providers.json src-tauri/tauri.conf.json package.json package-lock.json web/manifest.webmanifest; do
             python -m json.tool "$file" >/dev/null
           done
+      - name: Install pinned RustSec auditor
+        run: cargo install cargo-audit --version 0.22.2 --locked --no-default-features
+      - name: Audit committed Rust lockfile
+        run: cargo audit --file src-tauri/Cargo.lock
       - name: Report Tauri environment
         run: npm run native:info
 
@@ -85,7 +94,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: rustfmt, clippy
       - name: Install Linux Tauri prerequisites
@@ -99,12 +108,12 @@ jobs:
         run: npm ci
       - name: Check Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
-      - name: Lint Rust
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-      - name: Test Rust
-        run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Build native bundles without production signing
-        run: npm run native:build -- --ci --no-sign --bundles ${{ matrix.bundles }}
+      - name: Lint locked Rust graph
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+      - name: Test locked Rust graph
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Build locked native bundles without production signing
+        run: npm run native:build -- --ci --no-sign --bundles ${{ matrix.bundles }} -- --locked
       - name: Upload unsigned verification bundles
         uses: actions/upload-artifact@v4
         with:
@@ -130,7 +139,7 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
       - name: Install Android SDK and NDK
@@ -141,8 +150,8 @@ jobs:
         run: npm ci
       - name: Generate Android project
         run: npx tauri android init --ci
-      - name: Build development-signed debug APK
-        run: npx tauri android build --ci --debug --apk
+      - name: Build development-signed debug APK from the locked graph
+        run: npx tauri android build --ci --debug --apk -- --locked
       - name: Upload Android debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -162,15 +171,15 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim
       - name: Install locked JavaScript dependencies
         run: npm ci
       - name: Generate iOS project
         run: npx tauri ios init --ci
-      - name: Build iOS simulator application
-        run: npx tauri ios build --ci --debug --target aarch64-sim
+      - name: Build iOS simulator application from the locked graph
+        run: npx tauri ios build --ci --debug --target aarch64-sim -- --locked
       - name: Upload iOS simulator application
         uses: actions/upload-artifact@v4
         with:

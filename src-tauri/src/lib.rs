@@ -25,18 +25,12 @@ fn unlock_vault(
 }
 
 #[tauri::command]
-fn lock_vault(
-    app: AppHandle,
-    manager: State<'_, VaultManager>,
-) -> Result<VaultStatus, String> {
+fn lock_vault(app: AppHandle, manager: State<'_, VaultManager>) -> Result<VaultStatus, String> {
     manager.lock(&app).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn create_goal(
-    manager: State<'_, VaultManager>,
-    title: String,
-) -> Result<GoalRecord, String> {
+fn create_goal(manager: State<'_, VaultManager>, title: String) -> Result<GoalRecord, String> {
     manager
         .create_goal(&title)
         .map_err(|error| error.to_string())
@@ -116,8 +110,7 @@ fn set_provider_permission(
     provider_id: String,
     granted: bool,
 ) -> Result<Value, String> {
-    runtime::provider_permission(&manager, &provider_id, granted)
-        .map_err(|error| error.to_string())
+    runtime::provider_permission(&manager, &provider_id, granted).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -126,8 +119,7 @@ fn set_provider_rollback(
     provider_id: String,
     ready: bool,
 ) -> Result<Value, String> {
-    runtime::provider_rollback(&manager, &provider_id, ready)
-        .map_err(|error| error.to_string())
+    runtime::provider_rollback(&manager, &provider_id, ready).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -144,8 +136,7 @@ fn set_provider_enabled(
     provider_id: String,
     enabled: bool,
 ) -> Result<Value, String> {
-    runtime::enable_provider(&manager, &provider_id, enabled)
-        .map_err(|error| error.to_string())
+    runtime::enable_provider(&manager, &provider_id, enabled).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -153,8 +144,7 @@ fn erase_provider_credential(
     manager: State<'_, VaultManager>,
     provider_id: String,
 ) -> Result<Value, String> {
-    runtime::erase_provider_credential(&manager, &provider_id)
-        .map_err(|error| error.to_string())
+    runtime::erase_provider_credential(&manager, &provider_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -167,10 +157,7 @@ fn provider_chat(
 }
 
 #[tauri::command]
-fn install_skill(
-    manager: State<'_, VaultManager>,
-    content: String,
-) -> Result<Value, String> {
+fn install_skill(manager: State<'_, VaultManager>, content: String) -> Result<Value, String> {
     runtime::install_skill(&manager, &content).map_err(|error| error.to_string())
 }
 
@@ -184,18 +171,12 @@ fn set_skill_enabled(
 }
 
 #[tauri::command]
-fn remove_skill(
-    manager: State<'_, VaultManager>,
-    skill_id: String,
-) -> Result<Value, String> {
+fn remove_skill(manager: State<'_, VaultManager>, skill_id: String) -> Result<Value, String> {
     runtime::remove_skill(&manager, &skill_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn preview_migration(
-    payload: Value,
-    source_name: String,
-) -> Result<Value, String> {
+fn preview_migration(payload: Value, source_name: String) -> Result<Value, String> {
     runtime::preview_import(&payload, &source_name).map_err(|error| error.to_string())
 }
 
@@ -255,15 +236,11 @@ fn set_schedule_enabled(
     schedule_id: String,
     enabled: bool,
 ) -> Result<Value, String> {
-    runtime::toggle_schedule(&manager, &schedule_id, enabled)
-        .map_err(|error| error.to_string())
+    runtime::toggle_schedule(&manager, &schedule_id, enabled).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn delete_schedule(
-    manager: State<'_, VaultManager>,
-    schedule_id: String,
-) -> Result<Value, String> {
+fn delete_schedule(manager: State<'_, VaultManager>, schedule_id: String) -> Result<Value, String> {
     runtime::delete_schedule(&manager, &schedule_id).map_err(|error| error.to_string())
 }
 

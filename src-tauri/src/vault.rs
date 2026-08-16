@@ -82,7 +82,11 @@ impl VaultManager {
         VaultStatus {
             backend: "sqlcipher",
             encrypted: true,
-            unlocked: self.unlocked.lock().map(|state| state.is_some()).unwrap_or(false),
+            unlocked: self
+                .unlocked
+                .lock()
+                .map(|state| state.is_some())
+                .unwrap_or(false),
             initialized,
             schema_version: 2,
             external_automation_enabled: false,
@@ -166,7 +170,8 @@ impl VaultManager {
                     created_at: row.get(3)?,
                 })
             })?;
-            rows.collect::<Result<Vec<_>, _>>().map_err(VaultError::from)
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(VaultError::from)
         })
     }
 
@@ -221,7 +226,8 @@ fn open_encrypted_connection(path: &Path, key_hex: &str) -> Result<Connection, V
         key_hex
     ));
     connection.execute_batch(key_pragma.as_str())?;
-    let cipher_version = connection.query_row("PRAGMA cipher_version", [], |row| row.get::<_, String>(0));
+    let cipher_version =
+        connection.query_row("PRAGMA cipher_version", [], |row| row.get::<_, String>(0));
     if cipher_version.is_err() {
         return Err(VaultError::CipherUnavailable);
     }

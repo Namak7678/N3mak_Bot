@@ -34,7 +34,13 @@ fn text(value: &Value, key: &str, fallback: &str) -> String {
 }
 
 fn clean(value: &str, maximum: usize) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(maximum).collect()
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(maximum)
+        .collect()
 }
 
 fn invalid(message: impl Into<String>) -> VaultError {
@@ -42,7 +48,8 @@ fn invalid(message: impl Into<String>) -> VaultError {
 }
 
 fn parse_embedded(source: &str, label: &str) -> Result<Value, VaultError> {
-    serde_json::from_str(source).map_err(|error| invalid(format!("invalid embedded {label}: {error}")))
+    serde_json::from_str(source)
+        .map_err(|error| invalid(format!("invalid embedded {label}: {error}")))
 }
 
 fn merge_object(target: &mut Value, update: &Value) {
@@ -98,19 +105,77 @@ fn requires_approval(command: &str) -> bool {
 fn route_owner(command: &str) -> &'static str {
     let normalized = command.to_lowercase();
     let routes: [(&str, &[&str]); 9] = [
-        ("sentinel", &["أمن", "أمني", "ثغرة", "أسرار", "صلاحيات", "security"]),
-        ("forge", &["كود", "تطوير", "اختبار", "واجهة", "api", "database", "github", "pipeline"]),
-        ("nova", &["تسويق", "حملة", "محتوى", "linkedin", "علاقات عامة", "مستثمر"]),
+        (
+            "sentinel",
+            &["أمن", "أمني", "ثغرة", "أسرار", "صلاحيات", "security"],
+        ),
+        (
+            "forge",
+            &[
+                "كود",
+                "تطوير",
+                "اختبار",
+                "واجهة",
+                "api",
+                "database",
+                "github",
+                "pipeline",
+            ],
+        ),
+        (
+            "nova",
+            &["تسويق", "حملة", "محتوى", "linkedin", "علاقات عامة", "مستثمر"],
+        ),
         ("pulse", &["أداء", "كفاءة", "تكلفة", "إنتاجية", "kpi"]),
         ("aegis", &["مخاطر", "خطر", "risk", "سياسي", "سلسلة الإمداد"]),
-        ("nautilus", &["اقتصاد أزرق", "صيد", "ميناء", "موانئ", "تبريد", "استزراع", "بحري"]),
-        ("meridian", &["سوق", "موريتانيا", "مصر", "روسيا", "النرويج", "الصين", "اليابان", "usa", "استثمار"]),
-        ("athena", &["اجتماع", "موعد", "موجز", "تقرير يومي", "تقرير أسبوعي", "ذكّر"]),
-        ("atlas", &["خطة", "الأسبوع", "مهام", "مشروع", "deadline", "أولوية"]),
+        (
+            "nautilus",
+            &[
+                "اقتصاد أزرق",
+                "صيد",
+                "ميناء",
+                "موانئ",
+                "تبريد",
+                "استزراع",
+                "بحري",
+            ],
+        ),
+        (
+            "meridian",
+            &[
+                "سوق",
+                "موريتانيا",
+                "مصر",
+                "روسيا",
+                "النرويج",
+                "الصين",
+                "اليابان",
+                "usa",
+                "استثمار",
+            ],
+        ),
+        (
+            "athena",
+            &[
+                "اجتماع",
+                "موعد",
+                "موجز",
+                "تقرير يومي",
+                "تقرير أسبوعي",
+                "ذكّر",
+            ],
+        ),
+        (
+            "atlas",
+            &["خطة", "الأسبوع", "مهام", "مشروع", "deadline", "أولوية"],
+        ),
     ];
     let mut selected = (0_usize, routes.len(), "atlas");
     for (index, (owner, terms)) in routes.iter().enumerate() {
-        let score = terms.iter().filter(|term| normalized.contains(**term)).count();
+        let score = terms
+            .iter()
+            .filter(|term| normalized.contains(**term))
+            .count();
         if score > selected.0 || (score == selected.0 && score > 0 && index < selected.1) {
             selected = (score, index, owner);
         }
@@ -125,7 +190,11 @@ fn task_priority(command: &str, approval: bool) -> &'static str {
         .any(|term| normalized.contains(term))
     {
         "critical"
-    } else if approval || ["مهم", "مرتفع", "high"].iter().any(|term| normalized.contains(term)) {
+    } else if approval
+        || ["مهم", "مرتفع", "high"]
+            .iter()
+            .any(|term| normalized.contains(term))
+    {
         "high"
     } else {
         "medium"
@@ -149,7 +218,11 @@ fn new_workflow(task: &Value, fresh: bool) -> Value {
     let approval = task["requires_approval"].as_bool().unwrap_or(false)
         || task["priority"] == "critical"
         || task["status"] == "approval";
-    let review_owner = if executor == "forge" { "atlas" } else { "forge" };
+    let review_owner = if executor == "forge" {
+        "atlas"
+    } else {
+        "forge"
+    };
     let owners = [
         ("plan", "atlas"),
         ("execute", executor.as_str()),
@@ -250,9 +323,8 @@ fn new_workflow(task: &Value, fresh: bool) -> Value {
 
 fn load_task_records(manager: &VaultManager) -> Result<Vec<(Option<String>, Value)>, VaultError> {
     manager.with_connection(|connection| {
-        let mut statement = connection.prepare(
-            "SELECT source_id, metadata FROM task_records ORDER BY created_at DESC",
-        )?;
+        let mut statement = connection
+            .prepare("SELECT source_id, metadata FROM task_records ORDER BY created_at DESC")?;
         let rows = statement.query_map([], |row| {
             let source_id: Option<String> = row.get(0)?;
             let metadata: String = row.get(1)?;
@@ -382,7 +454,8 @@ fn load_skills(manager: &VaultManager) -> Result<Vec<Value>, VaultError> {
                 "updated_at": row.get::<_, String>(6)?
             }))
         })?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(VaultError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(VaultError::from)
     })
 }
 
@@ -454,7 +527,8 @@ fn load_schedules(manager: &VaultManager) -> Result<Vec<Value>, VaultError> {
                 "updated_at": row.get::<_, String>(8)?
             }))
         })?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(VaultError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(VaultError::from)
     })
 }
 
@@ -474,7 +548,8 @@ fn load_imports(manager: &VaultManager) -> Result<Vec<Value>, VaultError> {
                 "created_at": row.get::<_, String>(4)?
             }))
         })?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(VaultError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(VaultError::from)
     })
 }
 
@@ -535,12 +610,18 @@ pub fn state(manager: &VaultManager) -> Result<Value, VaultError> {
                 "active".to_string(),
                 json!(assigned
                     .iter()
-                    .filter(|task| matches!(task["status"].as_str(), Some("queued" | "in_progress" | "review")))
+                    .filter(|task| matches!(
+                        task["status"].as_str(),
+                        Some("queued" | "in_progress" | "review")
+                    ))
                     .count()),
             );
             queue.insert(
                 "waiting_on_commander".to_string(),
-                json!(assigned.iter().filter(|task| task["status"] == "approval").count()),
+                json!(assigned
+                    .iter()
+                    .filter(|task| task["status"] == "approval")
+                    .count()),
             );
             queue.insert("items".to_string(), json!(items));
         }
@@ -564,13 +645,22 @@ pub fn state(manager: &VaultManager) -> Result<Value, VaultError> {
             }));
         }
     }
-    audit_events.sort_by(|left, right| text(right, "created_at", "").cmp(&text(left, "created_at", "")));
+    audit_events
+        .sort_by(|left, right| text(right, "created_at", "").cmp(&text(left, "created_at", "")));
     audit_events.truncate(40);
     state["decisions"] = json!(decisions);
-    let capabilities_total = capabilities["capabilities"].as_array().map(Vec::len).unwrap_or(0);
+    let capabilities_total = capabilities["capabilities"]
+        .as_array()
+        .map(Vec::len)
+        .unwrap_or(0);
     let capability_enabled = capabilities["capabilities"]
         .as_array()
-        .map(|items| items.iter().filter(|item| item["state"] == "enabled").count())
+        .map(|items| {
+            items
+                .iter()
+                .filter(|item| item["state"] == "enabled")
+                .count()
+        })
         .unwrap_or(0);
     state["capability_policy"] = capabilities.clone();
     state["provider_registry"] = load_providers(manager)?;
@@ -617,7 +707,10 @@ pub fn state(manager: &VaultManager) -> Result<Value, VaultError> {
         "stage_order": STAGE_IDS
     });
 
-    let dynamic: Vec<&Value> = tasks.iter().filter(|task| task["source"] == "CEO Command Center").collect();
+    let dynamic: Vec<&Value> = tasks
+        .iter()
+        .filter(|task| task["source"] == "CEO Command Center")
+        .collect();
     if let Some(metrics) = state["metrics"].as_object_mut() {
         let add_metric = |metrics: &mut Map<String, Value>, key: &str, additional: usize| {
             let base = metrics.get(key).and_then(Value::as_i64).unwrap_or(0);
@@ -626,21 +719,43 @@ pub fn state(manager: &VaultManager) -> Result<Value, VaultError> {
         add_metric(
             metrics,
             "in_progress",
-            dynamic.iter().filter(|task| matches!(task["status"].as_str(), Some("queued" | "in_progress" | "review"))).count(),
+            dynamic
+                .iter()
+                .filter(|task| {
+                    matches!(
+                        task["status"].as_str(),
+                        Some("queued" | "in_progress" | "review")
+                    )
+                })
+                .count(),
         );
         add_metric(
             metrics,
             "blocked",
-            dynamic.iter().filter(|task| matches!(task["status"].as_str(), Some("blocked" | "approval"))).count(),
+            dynamic
+                .iter()
+                .filter(|task| matches!(task["status"].as_str(), Some("blocked" | "approval")))
+                .count(),
         );
-        add_metric(metrics, "completed", dynamic.iter().filter(|task| task["status"] == "completed").count());
+        add_metric(
+            metrics,
+            "completed",
+            dynamic
+                .iter()
+                .filter(|task| task["status"] == "completed")
+                .count(),
+        );
     }
     Ok(state)
 }
 
 fn save_task(manager: &VaultManager, task: &Value) -> Result<(), VaultError> {
     let task_id = text(task, "id", "");
-    let source_id = if is_static_task(&task_id)? { Some(task_id.clone()) } else { None };
+    let source_id = if is_static_task(&task_id)? {
+        Some(task_id.clone())
+    } else {
+        None
+    };
     let serialized = serde_json::to_string(task).map_err(|error| invalid(error.to_string()))?;
     let timestamp = now();
     manager.with_connection(|connection| {
@@ -663,7 +778,11 @@ fn save_task(manager: &VaultManager, task: &Value) -> Result<(), VaultError> {
                 text(task, "status", "queued"),
                 text(&task["workflow"], "state", "ready"),
                 text(task, "type", "توجيه قيادي"),
-                if task["requires_approval"].as_bool().unwrap_or(false) { "sovereign" } else { "local" },
+                if task["requires_approval"].as_bool().unwrap_or(false) {
+                    "sovereign"
+                } else {
+                    "local"
+                },
                 serialized,
                 timestamp
             ],
@@ -708,7 +827,12 @@ fn record_activity(
     })
 }
 
-fn record_audit(manager: &VaultManager, event_type: &str, outcome: &str, payload: Value) -> Result<(), VaultError> {
+fn record_audit(
+    manager: &VaultManager,
+    event_type: &str,
+    outcome: &str,
+    payload: Value,
+) -> Result<(), VaultError> {
     manager.with_connection(|connection| {
         connection.execute(
             "INSERT INTO audit_events(id, event_type, outcome, payload, created_at) VALUES(?1, ?2, ?3, ?4, ?5)",
@@ -779,7 +903,9 @@ pub fn dispatch(manager: &VaultManager, command: &str, autorun: bool) -> Result<
                 |row| row.get(0),
             )
             .optional()?;
-        let number = current.and_then(|value| value.parse::<i64>().ok()).unwrap_or(242);
+        let number = current
+            .and_then(|value| value.parse::<i64>().ok())
+            .unwrap_or(242);
         connection.execute(
             "INSERT OR REPLACE INTO vault_metadata(key, value) VALUES('next_task_number', ?1)",
             params![(number + 1).to_string()],
@@ -822,7 +948,10 @@ pub fn dispatch(manager: &VaultManager, command: &str, autorun: bool) -> Result<
         if approval {
             &format!("صنّف Orion التوجيه {task_id} كمسار سيادي وبدأ التحضير المعزول")
         } else {
-            &format!("حوّل Orion التوجيه {task_id} إلى مهمة وعيّنه إلى {}", agent_name(&workforce, owner))
+            &format!(
+                "حوّل Orion التوجيه {task_id} إلى مهمة وعيّنه إلى {}",
+                agent_name(&workforce, owner)
+            )
         },
         Some(&task_id),
     )?;
@@ -864,7 +993,8 @@ pub fn dispatch(manager: &VaultManager, command: &str, autorun: bool) -> Result<
         result["executed"] = execution["executed"].clone();
         if execution["workflow"]["state"] == "waiting_approval" {
             result["accepted"] = json!(false);
-            result["message"] = json!("أكمل الفريق التحضير والمراجعة والأمن، وتوقفت الدورة عند بوابة سلطتك.");
+            result["message"] =
+                json!("أكمل الفريق التحضير والمراجعة والأمن، وتوقفت الدورة عند بوابة سلطتك.");
         } else if execution["workflow"]["state"] == "completed" {
             result["accepted"] = json!(true);
             result["message"] = json!("أكمل الفريق الدورة المحلية الآمنة وسجّل جميع مراحلها.");
@@ -879,19 +1009,24 @@ pub fn run_task(manager: &VaultManager, task_id: &str, mode: &str) -> Result<Val
     }
     let mut task = find_task(manager, task_id)?;
     let mut workflow = task["workflow"].clone();
-    if matches!(workflow["state"].as_str(), Some("completed" | "blocked" | "rejected" | "waiting_approval")) {
+    if matches!(
+        workflow["state"].as_str(),
+        Some("completed" | "blocked" | "rejected" | "waiting_approval")
+    ) {
         return Ok(json!({ "task": task, "workflow": workflow, "executed": [] }));
     }
-    let limit = if mode == "next" { 1 } else { STAGE_IDS.len() + 1 };
+    let limit = if mode == "next" {
+        1
+    } else {
+        STAGE_IDS.len() + 1
+    };
     let mut executed = Vec::new();
     for _ in 0..limit {
-        let next_index = workflow["stages"]
-            .as_array()
-            .and_then(|stages| {
-                stages.iter().position(|stage| {
-                    matches!(stage["status"].as_str(), Some("ready" | "pending"))
-                })
-            });
+        let next_index = workflow["stages"].as_array().and_then(|stages| {
+            stages
+                .iter()
+                .position(|stage| matches!(stage["status"].as_str(), Some("ready" | "pending")))
+        });
         let Some(index) = next_index else { break };
         let mut stage = workflow["stages"][index].clone();
         if stage["id"] == "approval" {
@@ -902,7 +1037,13 @@ pub fn run_task(manager: &VaultManager, task_id: &str, mode: &str) -> Result<Val
             workflow["cursor"] = json!(index);
             task["status"] = json!("approval");
             task["progress"] = json!(90);
-            append_audit(&mut workflow, &task, &stage, "توقفت الدورة عند بوابة سلطة القائد.", "waiting");
+            append_audit(
+                &mut workflow,
+                &task,
+                &stage,
+                "توقفت الدورة عند بوابة سلطة القائد.",
+                "waiting",
+            );
             executed.push(json!("approval"));
             break;
         }
@@ -914,29 +1055,46 @@ pub fn run_task(manager: &VaultManager, task_id: &str, mode: &str) -> Result<Val
             "security" => "اجتازت النتيجة بوابة الأمن ولم تُمنح صلاحية خارجية.",
             "release" => "سُجل إصدار محلي قابل للرجوع دون نشر خارجي.",
             "complete" => "أغلقت Athena الدورة وأدرجت النتيجة في الموجز.",
-            _ => "اكتملت المرحلة."
+            _ => "اكتملت المرحلة.",
         });
         workflow["stages"][index] = stage.clone();
         workflow["cursor"] = json!(index + 1);
         task["progress"] = json!(stage_progress(stage["id"].as_str().unwrap_or_default()));
-        append_audit(&mut workflow, &task, &stage, stage["result"].as_str().unwrap_or_default(), "done");
+        append_audit(
+            &mut workflow,
+            &task,
+            &stage,
+            stage["result"].as_str().unwrap_or_default(),
+            "done",
+        );
         executed.push(stage["id"].clone());
         if stage["id"] == "complete" {
             workflow["state"] = json!("completed");
             task["status"] = json!("completed");
             manager.with_connection(|connection| {
-                connection.execute("UPDATE goals SET status='completed' WHERE id=?1", params![task_id])?;
+                connection.execute(
+                    "UPDATE goals SET status='completed' WHERE id=?1",
+                    params![task_id],
+                )?;
                 Ok(())
             })?;
             break;
         }
         if let Some(stages) = workflow["stages"].as_array_mut() {
-            if let Some(next) = stages.iter_mut().skip(index + 1).find(|candidate| candidate["status"] == "pending") {
+            if let Some(next) = stages
+                .iter_mut()
+                .skip(index + 1)
+                .find(|candidate| candidate["status"] == "pending")
+            {
                 next["status"] = json!("ready");
             }
         }
         workflow["state"] = json!("running");
-        task["status"] = json!(if stage["id"] == "review" { "review" } else { "in_progress" });
+        task["status"] = json!(if stage["id"] == "review" {
+            "review"
+        } else {
+            "in_progress"
+        });
         if mode == "next" {
             break;
         }
@@ -948,7 +1106,12 @@ pub fn run_task(manager: &VaultManager, task_id: &str, mode: &str) -> Result<Val
     Ok(json!({ "task": task, "workflow": workflow, "executed": executed }))
 }
 
-pub fn decide_task(manager: &VaultManager, task_id: &str, decision: &str, note: &str) -> Result<Value, VaultError> {
+pub fn decide_task(
+    manager: &VaultManager,
+    task_id: &str,
+    decision: &str,
+    note: &str,
+) -> Result<Value, VaultError> {
     if !matches!(decision, "approve" | "reject") {
         return Err(invalid("invalid sovereign decision"));
     }
@@ -967,7 +1130,10 @@ pub fn decide_task(manager: &VaultManager, task_id: &str, decision: &str, note: 
         stage["status"] = json!("done");
         stage["result"] = json!("اعتمد القائد الاستمرار ضمن النطاق المحدد.");
         workflow["stages"][index] = stage.clone();
-        if let Some(next) = workflow["stages"].as_array_mut().and_then(|stages| stages.get_mut(index + 1)) {
+        if let Some(next) = workflow["stages"]
+            .as_array_mut()
+            .and_then(|stages| stages.get_mut(index + 1))
+        {
             next["status"] = json!("ready");
         }
         workflow["cursor"] = json!(index + 1);
@@ -982,7 +1148,10 @@ pub fn decide_task(manager: &VaultManager, task_id: &str, decision: &str, note: 
         task["status"] = json!("blocked");
         task["progress"] = json!(90);
         manager.with_connection(|connection| {
-            connection.execute("UPDATE goals SET status='blocked' WHERE id=?1", params![task_id])?;
+            connection.execute(
+                "UPDATE goals SET status='blocked' WHERE id=?1",
+                params![task_id],
+            )?;
             Ok(())
         })?;
     }
@@ -991,7 +1160,17 @@ pub fn decide_task(manager: &VaultManager, task_id: &str, decision: &str, note: 
     } else {
         format!("{} ملاحظة: {note}", text(&stage, "result", ""))
     };
-    append_audit(&mut workflow, &task, &stage, &message, if decision == "approve" { "approved" } else { "rejected" });
+    append_audit(
+        &mut workflow,
+        &task,
+        &stage,
+        &message,
+        if decision == "approve" {
+            "approved"
+        } else {
+            "rejected"
+        },
+    );
     workflow["updated_at"] = json!(now());
     task["workflow"] = workflow.clone();
     save_task(manager, &task)?;
@@ -1000,8 +1179,15 @@ pub fn decide_task(manager: &VaultManager, task_id: &str, decision: &str, note: 
     Ok(json!({ "task": task, "workflow": workflow, "decision": decision }))
 }
 
-pub fn update_task_status(manager: &VaultManager, task_id: &str, status: &str) -> Result<Value, VaultError> {
-    if !matches!(status, "queued" | "in_progress" | "review" | "blocked" | "completed" | "approval") {
+pub fn update_task_status(
+    manager: &VaultManager,
+    task_id: &str,
+    status: &str,
+) -> Result<Value, VaultError> {
+    if !matches!(
+        status,
+        "queued" | "in_progress" | "review" | "blocked" | "completed" | "approval"
+    ) {
         return Err(invalid("invalid task status"));
     }
     let mut task = find_task(manager, task_id)?;
@@ -1013,51 +1199,76 @@ pub fn update_task_status(manager: &VaultManager, task_id: &str, status: &str) -
         "approval" => 90,
         "blocked" => task["progress"].as_i64().unwrap_or(0),
         "completed" => 100,
-        _ => 0
+        _ => 0,
     });
     let workflow = new_workflow(&task, false);
     task["workflow"] = workflow.clone();
     save_task(manager, &task)?;
     save_workflow(manager, &workflow)?;
-    record_activity(manager, "task", "atlas", &format!("حدّث Atlas حالة {task_id} إلى {status}"), Some(task_id))?;
+    record_activity(
+        manager,
+        "task",
+        "atlas",
+        &format!("حدّث Atlas حالة {task_id} إلى {status}"),
+        Some(task_id),
+    )?;
     Ok(task)
 }
 
 fn provider_definition(provider_id: &str) -> Result<Value, VaultError> {
     parse_embedded(PROVIDERS_JSON, "provider catalog")?["providers"]
         .as_array()
-        .and_then(|providers| providers.iter().find(|provider| provider["id"] == provider_id))
+        .and_then(|providers| {
+            providers
+                .iter()
+                .find(|provider| provider["id"] == provider_id)
+        })
         .cloned()
         .ok_or_else(|| invalid("unknown provider"))
 }
 
 fn ensure_operational_provider(definition: &Value) -> Result<(), VaultError> {
     if definition["operational"].as_bool() == Some(false) {
-        return Err(invalid("this catalog entry requires a protocol-specific adapter before it can be configured"));
+        return Err(invalid(
+            "this catalog entry requires a protocol-specific adapter before it can be configured",
+        ));
     }
     Ok(())
 }
 
 fn validate_provider_endpoint(definition: &Value, endpoint: &str) -> Result<(), VaultError> {
-    let parsed = Url::parse(endpoint).map_err(|_| invalid("provider endpoint is not a valid URL"))?;
-    if !parsed.username().is_empty() || parsed.password().is_some() || parsed.query().is_some() || parsed.fragment().is_some() {
-        return Err(invalid("provider endpoint cannot contain credentials, a query, or a fragment"));
+    let parsed =
+        Url::parse(endpoint).map_err(|_| invalid("provider endpoint is not a valid URL"))?;
+    if !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(invalid(
+            "provider endpoint cannot contain credentials, a query, or a fragment",
+        ));
     }
     let host = parsed
         .host_str()
         .ok_or_else(|| invalid("provider endpoint requires a host"))?;
     if definition["local"].as_bool().unwrap_or(false) {
         if parsed.scheme() != "http" || !matches!(host, "localhost" | "127.0.0.1" | "::1") {
-            return Err(invalid("local provider endpoints must use HTTP on an exact loopback host"));
+            return Err(invalid(
+                "local provider endpoints must use HTTP on an exact loopback host",
+            ));
         }
         return Ok(());
     }
     if parsed.scheme() != "https" || !matches!(parsed.port(), None | Some(443)) {
-        return Err(invalid("hosted provider endpoints must use HTTPS on port 443"));
+        return Err(invalid(
+            "hosted provider endpoints must use HTTPS on port 443",
+        ));
     }
     if text(definition, "adapter", "") == "azure_openai" {
         if host == "openai.azure.com" || !host.ends_with(".openai.azure.com") {
-            return Err(invalid("Azure OpenAI endpoints must use a resource subdomain of openai.azure.com"));
+            return Err(invalid(
+                "Azure OpenAI endpoints must use a resource subdomain of openai.azure.com",
+            ));
         }
     } else {
         let catalog_endpoint = text(definition, "base_url", "");
@@ -1066,7 +1277,9 @@ fn validate_provider_endpoint(definition: &Value, endpoint: &str) -> Result<(), 
             .and_then(|url| url.host_str().map(str::to_string))
             .ok_or_else(|| invalid("provider catalog endpoint is invalid"))?;
         if !host.eq_ignore_ascii_case(&catalog_host) {
-            return Err(invalid("provider endpoint host does not match the selected provider"));
+            return Err(invalid(
+                "provider endpoint host does not match the selected provider",
+            ));
         }
     }
     Ok(())
@@ -1082,10 +1295,22 @@ pub fn configure_provider(
     let definition = provider_definition(provider_id)?;
     ensure_operational_provider(&definition)?;
     let endpoint = clean(endpoint, 1_024);
-    let endpoint = if endpoint.is_empty() { text(&definition, "base_url", "") } else { endpoint };
+    let endpoint = if endpoint.is_empty() {
+        text(&definition, "base_url", "")
+    } else {
+        endpoint
+    };
     let model = clean(model, 300);
-    let model = if model.is_empty() { text(&definition, "default_model", "") } else { model };
-    if definition["custom_endpoint_required"].as_bool().unwrap_or(false) && endpoint.is_empty() {
+    let model = if model.is_empty() {
+        text(&definition, "default_model", "")
+    } else {
+        model
+    };
+    if definition["custom_endpoint_required"]
+        .as_bool()
+        .unwrap_or(false)
+        && endpoint.is_empty()
+    {
         return Err(invalid("this provider requires a custom endpoint"));
     }
     if model.is_empty() {
@@ -1129,7 +1354,11 @@ pub fn configure_provider(
     Ok(json!({ "provider_id": provider_id, "configured": true, "enabled": false }))
 }
 
-pub fn provider_permission(manager: &VaultManager, provider_id: &str, granted: bool) -> Result<Value, VaultError> {
+pub fn provider_permission(
+    manager: &VaultManager,
+    provider_id: &str,
+    granted: bool,
+) -> Result<Value, VaultError> {
     provider_definition(provider_id)?;
     manager.with_connection(|connection| {
         let changed = connection.execute(
@@ -1142,13 +1371,21 @@ pub fn provider_permission(manager: &VaultManager, provider_id: &str, granted: b
     record_audit(
         manager,
         "provider.permission_changed",
-        if granted { "granted_disabled" } else { "revoked_disabled" },
+        if granted {
+            "granted_disabled"
+        } else {
+            "revoked_disabled"
+        },
         json!({ "provider_id": provider_id, "permission_granted": granted }),
     )?;
     Ok(json!({ "provider_id": provider_id, "permission_granted": granted, "enabled": false }))
 }
 
-pub fn provider_rollback(manager: &VaultManager, provider_id: &str, ready: bool) -> Result<Value, VaultError> {
+pub fn provider_rollback(
+    manager: &VaultManager,
+    provider_id: &str,
+    ready: bool,
+) -> Result<Value, VaultError> {
     provider_definition(provider_id)?;
     manager.with_connection(|connection| {
         let changed = connection.execute(
@@ -1161,13 +1398,20 @@ pub fn provider_rollback(manager: &VaultManager, provider_id: &str, ready: bool)
     record_audit(
         manager,
         "provider.rollback_changed",
-        if ready { "ready_disabled" } else { "missing_disabled" },
+        if ready {
+            "ready_disabled"
+        } else {
+            "missing_disabled"
+        },
         json!({ "provider_id": provider_id, "rollback_ready": ready }),
     )?;
     Ok(json!({ "provider_id": provider_id, "rollback_ready": ready, "enabled": false }))
 }
 
-fn provider_connection(manager: &VaultManager, provider_id: &str) -> Result<(Value, String, String, Zeroizing<String>), VaultError> {
+fn provider_connection(
+    manager: &VaultManager,
+    provider_id: &str,
+) -> Result<(Value, String, String, Zeroizing<String>), VaultError> {
     let definition = provider_definition(provider_id)?;
     ensure_operational_provider(&definition)?;
     manager.with_connection(|connection| {
@@ -1191,7 +1435,12 @@ fn provider_connection(manager: &VaultManager, provider_id: &str) -> Result<(Val
         if secret.is_none() && !matches!(auth.as_str(), "none" | "optional-bearer") {
             return Err(invalid("provider credential is not stored"));
         }
-        Ok((definition, config.0, config.1, secret.unwrap_or_else(|| Zeroizing::new(String::new()))))
+        Ok((
+            definition,
+            config.0,
+            config.1,
+            secret.unwrap_or_else(|| Zeroizing::new(String::new())),
+        ))
     })
 }
 
@@ -1202,21 +1451,27 @@ fn request_headers(definition: &Value, secret: &str) -> Result<HeaderMap, VaultE
         "x-api-key" => {
             headers.insert(
                 HeaderName::from_static("x-api-key"),
-                HeaderValue::from_str(secret).map_err(|_| invalid("credential contains invalid header characters"))?,
+                HeaderValue::from_str(secret)
+                    .map_err(|_| invalid("credential contains invalid header characters"))?,
             );
-            headers.insert(HeaderName::from_static("anthropic-version"), HeaderValue::from_static("2023-06-01"));
+            headers.insert(
+                HeaderName::from_static("anthropic-version"),
+                HeaderValue::from_static("2023-06-01"),
+            );
         }
         "api-key" => {
             headers.insert(
                 HeaderName::from_static("api-key"),
-                HeaderValue::from_str(secret).map_err(|_| invalid("credential contains invalid header characters"))?,
+                HeaderValue::from_str(secret)
+                    .map_err(|_| invalid("credential contains invalid header characters"))?,
             );
         }
         "query-key" => {
             // Gemini accepts x-goog-api-key. Keeping it out of the URL prevents leakage via logs/errors.
             headers.insert(
                 HeaderName::from_static("x-goog-api-key"),
-                HeaderValue::from_str(secret).map_err(|_| invalid("credential contains invalid header characters"))?,
+                HeaderValue::from_str(secret)
+                    .map_err(|_| invalid("credential contains invalid header characters"))?,
             );
         }
         "bearer" | "optional-bearer" if !secret.is_empty() => {
@@ -1285,7 +1540,10 @@ pub fn verify_provider(manager: &VaultManager, provider_id: &str) -> Result<Valu
     let url = match adapter.as_str() {
         "ollama" => format!("{}/api/tags", endpoint.trim_end_matches('/')),
         "gemini" => format!("{}/models", endpoint.trim_end_matches('/')),
-        "azure_openai" => format!("{}/openai/models?api-version=2024-10-21", endpoint.trim_end_matches('/')),
+        "azure_openai" => format!(
+            "{}/openai/models?api-version=2024-10-21",
+            endpoint.trim_end_matches('/')
+        ),
         _ => format!("{}/models", endpoint.trim_end_matches('/')),
     };
     let response = match http_client()?.get(url).headers(headers).send() {
@@ -1297,7 +1555,9 @@ pub fn verify_provider(manager: &VaultManager, provider_id: &str) -> Result<Valu
                 "disabled",
                 json!({ "provider_id": provider_id, "failure": "network_tls_or_redirect" }),
             )?;
-            return Err(invalid("provider health check failed, timed out, or attempted a redirect"));
+            return Err(invalid(
+                "provider health check failed, timed out, or attempted a redirect",
+            ));
         }
     };
     if !response.status().is_success() {
@@ -1308,7 +1568,9 @@ pub fn verify_provider(manager: &VaultManager, provider_id: &str) -> Result<Valu
             "disabled",
             json!({ "provider_id": provider_id, "failure": "http_status", "status": status }),
         )?;
-        return Err(invalid(format!("provider health check returned HTTP {status}")));
+        return Err(invalid(format!(
+            "provider health check returned HTTP {status}"
+        )));
     }
     let timestamp = now();
     manager.with_connection(|connection| {
@@ -1324,10 +1586,16 @@ pub fn verify_provider(manager: &VaultManager, provider_id: &str) -> Result<Valu
         "disabled",
         json!({ "provider_id": provider_id, "checked_at": timestamp }),
     )?;
-    Ok(json!({ "provider_id": provider_id, "health_verified": true, "enabled": false, "checked_at": timestamp }))
+    Ok(
+        json!({ "provider_id": provider_id, "health_verified": true, "enabled": false, "checked_at": timestamp }),
+    )
 }
 
-pub fn enable_provider(manager: &VaultManager, provider_id: &str, enabled: bool) -> Result<Value, VaultError> {
+pub fn enable_provider(
+    manager: &VaultManager,
+    provider_id: &str,
+    enabled: bool,
+) -> Result<Value, VaultError> {
     let definition = provider_definition(provider_id)?;
     ensure_operational_provider(&definition)?;
     manager.with_connection(|connection| {
@@ -1357,7 +1625,10 @@ pub fn enable_provider(manager: &VaultManager, provider_id: &str, enabled: bool)
     Ok(json!({ "provider_id": provider_id, "enabled": enabled }))
 }
 
-pub fn erase_provider_credential(manager: &VaultManager, provider_id: &str) -> Result<Value, VaultError> {
+pub fn erase_provider_credential(
+    manager: &VaultManager,
+    provider_id: &str,
+) -> Result<Value, VaultError> {
     provider_definition(provider_id)?;
     manager.with_connection(|connection| {
         let transaction = connection.unchecked_transaction()?;
@@ -1378,7 +1649,11 @@ pub fn erase_provider_credential(manager: &VaultManager, provider_id: &str) -> R
     Ok(json!({ "provider_id": provider_id, "credential_stored": false, "enabled": false }))
 }
 
-pub fn provider_chat(manager: &VaultManager, provider_id: &str, prompt: &str) -> Result<Value, VaultError> {
+pub fn provider_chat(
+    manager: &VaultManager,
+    provider_id: &str,
+    prompt: &str,
+) -> Result<Value, VaultError> {
     let prompt = clean(prompt, 16_000);
     if prompt.is_empty() {
         return Err(invalid("provider prompt cannot be empty"));
@@ -1405,7 +1680,11 @@ pub fn provider_chat(manager: &VaultManager, provider_id: &str, prompt: &str) ->
             json!({ "model": model, "max_tokens": 2048, "messages": [{ "role": "user", "content": prompt }] }),
         ),
         "gemini" => (
-            format!("{}/models/{}:generateContent", endpoint.trim_end_matches('/'), urlencoding::encode(&model)),
+            format!(
+                "{}/models/{}:generateContent",
+                endpoint.trim_end_matches('/'),
+                urlencoding::encode(&model)
+            ),
             json!({ "contents": [{ "parts": [{ "text": prompt }] }] }),
         ),
         "cohere" => (
@@ -1417,7 +1696,11 @@ pub fn provider_chat(manager: &VaultManager, provider_id: &str, prompt: &str) ->
             json!({ "model": model, "stream": false, "messages": [{ "role": "user", "content": prompt }] }),
         ),
         "azure_openai" => (
-            format!("{}/openai/deployments/{}/chat/completions?api-version=2024-10-21", endpoint.trim_end_matches('/'), urlencoding::encode(&model)),
+            format!(
+                "{}/openai/deployments/{}/chat/completions?api-version=2024-10-21",
+                endpoint.trim_end_matches('/'),
+                urlencoding::encode(&model)
+            ),
             json!({ "messages": [{ "role": "user", "content": prompt }] }),
         ),
         _ => (
@@ -1440,7 +1723,13 @@ pub fn provider_chat(manager: &VaultManager, provider_id: &str, prompt: &str) ->
         _ => payload["choices"][0]["message"]["content"].as_str(),
     }
     .ok_or_else(|| invalid("provider response did not contain assistant text"))?;
-    record_activity(manager, "provider", "orion", &format!("اكتملت استجابة مشفرة عبر {provider_id}"), None)?;
+    record_activity(
+        manager,
+        "provider",
+        "orion",
+        &format!("اكتملت استجابة مشفرة عبر {provider_id}"),
+        None,
+    )?;
     Ok(json!({ "provider_id": provider_id, "model": model, "output": output }))
 }
 
@@ -1448,7 +1737,11 @@ fn skill_field(content: &str, name: &str) -> Option<String> {
     let prefix = format!("{name}:");
     content
         .lines()
-        .find_map(|line| line.trim().strip_prefix(&prefix).map(|value| value.trim().trim_matches(['\'', '"']).to_string()))
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix(&prefix)
+                .map(|value| value.trim().trim_matches(['\'', '"']).to_string())
+        })
         .filter(|value| !value.is_empty())
 }
 
@@ -1463,13 +1756,26 @@ pub fn install_skill(manager: &VaultManager, content: &str) -> Result<Value, Vau
         .lines()
         .find_map(|line| line.trim().strip_prefix("# "))
         .unwrap_or("Imported skill");
-    let name = clean(&skill_field(content, "name").unwrap_or_else(|| heading.to_string()), 120);
-    let version = clean(&skill_field(content, "version").unwrap_or_else(|| "1.0.0".to_string()), 40);
-    let description = clean(&skill_field(content, "description").unwrap_or_else(|| "Imported SKILL.md instructions".to_string()), 500);
-    let raw_id = skill_field(content, "id").unwrap_or_else(|| name.to_lowercase().replace(' ', "-"));
+    let name = clean(
+        &skill_field(content, "name").unwrap_or_else(|| heading.to_string()),
+        120,
+    );
+    let version = clean(
+        &skill_field(content, "version").unwrap_or_else(|| "1.0.0".to_string()),
+        40,
+    );
+    let description = clean(
+        &skill_field(content, "description")
+            .unwrap_or_else(|| "Imported SKILL.md instructions".to_string()),
+        500,
+    );
+    let raw_id =
+        skill_field(content, "id").unwrap_or_else(|| name.to_lowercase().replace(' ', "-"));
     let id: String = raw_id
         .chars()
-        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        })
         .take(80)
         .collect();
     if id.len() < 2 || name.len() < 2 {
@@ -1487,16 +1793,24 @@ pub fn install_skill(manager: &VaultManager, content: &str) -> Result<Value, Vau
         )?;
         Ok(())
     })?;
-    Ok(json!({ "id": id, "name": name, "version": version, "description": description, "enabled": false }))
+    Ok(
+        json!({ "id": id, "name": name, "version": version, "description": description, "enabled": false }),
+    )
 }
 
-pub fn enable_skill(manager: &VaultManager, skill_id: &str, enabled: bool) -> Result<Value, VaultError> {
+pub fn enable_skill(
+    manager: &VaultManager,
+    skill_id: &str,
+    enabled: bool,
+) -> Result<Value, VaultError> {
     manager.with_connection(|connection| {
         let changed = connection.execute(
             "UPDATE installed_skills SET enabled=?2, updated_at=?3 WHERE id=?1",
             params![skill_id, i64::from(enabled), now()],
         )?;
-        if changed == 0 { return Err(VaultError::NotFound); }
+        if changed == 0 {
+            return Err(VaultError::NotFound);
+        }
         Ok(())
     })?;
     Ok(json!({ "id": skill_id, "enabled": enabled }))
@@ -1504,8 +1818,13 @@ pub fn enable_skill(manager: &VaultManager, skill_id: &str, enabled: bool) -> Re
 
 pub fn remove_skill(manager: &VaultManager, skill_id: &str) -> Result<Value, VaultError> {
     manager.with_connection(|connection| {
-        let changed = connection.execute("DELETE FROM installed_skills WHERE id=?1", params![skill_id])?;
-        if changed == 0 { return Err(VaultError::NotFound); }
+        let changed = connection.execute(
+            "DELETE FROM installed_skills WHERE id=?1",
+            params![skill_id],
+        )?;
+        if changed == 0 {
+            return Err(VaultError::NotFound);
+        }
         Ok(())
     })?;
     Ok(json!({ "id": skill_id, "removed": true }))
@@ -1515,11 +1834,29 @@ fn sensitive_import_key(key: &str) -> bool {
     let normalized = key.to_ascii_lowercase().replace('-', "_").replace(' ', "_");
     matches!(
         normalized.as_str(),
-        "key" | "api_key" | "apikey" | "token" | "access_token" | "refresh_token" |
-        "id_token" | "secret" | "client_secret" | "password" | "passphrase" |
-        "credential" | "credentials" | "private_key" | "privatekey" | "access_key" |
-        "secret_access_key" | "authorization" | "bearer" | "cookie" | "session_token" |
-        "signing_key" | "ssh_key"
+        "key"
+            | "api_key"
+            | "apikey"
+            | "token"
+            | "access_token"
+            | "refresh_token"
+            | "id_token"
+            | "secret"
+            | "client_secret"
+            | "password"
+            | "passphrase"
+            | "credential"
+            | "credentials"
+            | "private_key"
+            | "privatekey"
+            | "access_key"
+            | "secret_access_key"
+            | "authorization"
+            | "bearer"
+            | "cookie"
+            | "session_token"
+            | "signing_key"
+            | "ssh_key"
     ) || normalized.ends_with("_api_key")
         || normalized.ends_with("_token")
         || normalized.ends_with("_secret")
@@ -1555,14 +1892,20 @@ fn sanitize_import_payload(payload: &Value) -> Value {
     Value::Object(sanitized)
 }
 
-fn normalized_import_assets(payload: &Value) -> Result<Vec<(String, String, String, String)>, VaultError> {
+fn normalized_import_assets(
+    payload: &Value,
+) -> Result<Vec<(String, String, String, String)>, VaultError> {
     let mut assets = Vec::new();
     for category in ["agents", "prompts", "memories", "skills", "settings"] {
-        let Some(value) = payload.get(category) else { continue };
+        let Some(value) = payload.get(category) else {
+            continue;
+        };
         match value {
             Value::Array(items) => {
                 for (index, item) in items.iter().enumerate() {
-                    let source_key = item.get("id").and_then(Value::as_str)
+                    let source_key = item
+                        .get("id")
+                        .and_then(Value::as_str)
                         .or_else(|| item.get("name").and_then(Value::as_str))
                         .map(|value| clean(value, 160))
                         .filter(|value| !value.is_empty())
@@ -1601,7 +1944,8 @@ pub fn preview_import(payload: &Value, source_name: &str) -> Result<Value, Vault
     if !payload.is_object() {
         return Err(invalid("migration bundle must be a JSON object"));
     }
-    let raw = Zeroizing::new(serde_json::to_vec(payload).map_err(|error| invalid(error.to_string()))?);
+    let raw =
+        Zeroizing::new(serde_json::to_vec(payload).map_err(|error| invalid(error.to_string()))?);
     if raw.len() > 5_242_880 {
         return Err(invalid("migration bundle exceeds the 5 MiB limit"));
     }
@@ -1620,7 +1964,9 @@ pub fn preview_import(payload: &Value, source_name: &str) -> Result<Value, Vault
         total += count;
     }
     if total == 0 {
-        return Err(invalid("migration bundle has no supported agents, prompts, memories, skills, or settings"));
+        return Err(invalid(
+            "migration bundle has no supported agents, prompts, memories, skills, or settings",
+        ));
     }
     Ok(json!({
         "source_name": clean(source_name, 160),
@@ -1635,15 +1981,21 @@ pub fn preview_import(payload: &Value, source_name: &str) -> Result<Value, Vault
     }))
 }
 
-pub fn apply_import(manager: &VaultManager, payload: &Value, source_name: &str) -> Result<Value, VaultError> {
-    let raw = Zeroizing::new(serde_json::to_vec(payload).map_err(|error| invalid(error.to_string()))?);
+pub fn apply_import(
+    manager: &VaultManager,
+    payload: &Value,
+    source_name: &str,
+) -> Result<Value, VaultError> {
+    let raw =
+        Zeroizing::new(serde_json::to_vec(payload).map_err(|error| invalid(error.to_string()))?);
     if raw.len() > 5_242_880 {
         return Err(invalid("migration bundle exceeds the 5 MiB limit"));
     }
     drop(raw);
     let sanitized = sanitize_import_payload(payload);
     let preview = preview_import(&sanitized, source_name)?;
-    let serialized = serde_json::to_string(&sanitized).map_err(|error| invalid(error.to_string()))?;
+    let serialized =
+        serde_json::to_string(&sanitized).map_err(|error| invalid(error.to_string()))?;
     let assets = normalized_import_assets(&sanitized)?;
     let staged_records = assets.len();
     let id = Uuid::new_v4().to_string();
@@ -1726,7 +2078,9 @@ pub fn add_team_member(
             params![team_id],
             |row| Ok(row.get::<_, i64>(0)? == 1),
         )?;
-        if !exists { return Err(VaultError::NotFound); }
+        if !exists {
+            return Err(VaultError::NotFound);
+        }
         connection.execute(
             "INSERT INTO team_members(id, team_id, member_type, name, role, status, created_at)
              VALUES(?1, ?2, ?3, ?4, ?5, 'registered_identity', ?6)",
@@ -1745,13 +2099,19 @@ pub fn add_team_member(
     }))
 }
 
-pub fn toggle_team(manager: &VaultManager, team_id: &str, enabled: bool) -> Result<Value, VaultError> {
+pub fn toggle_team(
+    manager: &VaultManager,
+    team_id: &str,
+    enabled: bool,
+) -> Result<Value, VaultError> {
     manager.with_connection(|connection| {
         let changed = connection.execute(
             "UPDATE teams SET enabled=?2, updated_at=?3 WHERE id=?1",
             params![team_id, i64::from(enabled), now()],
         )?;
-        if changed == 0 { return Err(VaultError::NotFound); }
+        if changed == 0 {
+            return Err(VaultError::NotFound);
+        }
         Ok(())
     })?;
     Ok(json!({ "id": team_id, "enabled": enabled }))
@@ -1789,10 +2149,16 @@ pub fn create_schedule(
         )?;
         Ok(())
     })?;
-    Ok(json!({ "id": id, "name": name, "goal_template": goal_template, "frequency": frequency, "enabled": false }))
+    Ok(
+        json!({ "id": id, "name": name, "goal_template": goal_template, "frequency": frequency, "enabled": false }),
+    )
 }
 
-pub fn toggle_schedule(manager: &VaultManager, schedule_id: &str, enabled: bool) -> Result<Value, VaultError> {
+pub fn toggle_schedule(
+    manager: &VaultManager,
+    schedule_id: &str,
+    enabled: bool,
+) -> Result<Value, VaultError> {
     let frequency = manager.with_connection(|connection| {
         connection
             .query_row(
@@ -1803,7 +2169,11 @@ pub fn toggle_schedule(manager: &VaultManager, schedule_id: &str, enabled: bool)
             .optional()?
             .ok_or(VaultError::NotFound)
     })?;
-    let next_run = if enabled { Some(next_schedule_time(&frequency)?) } else { None };
+    let next_run = if enabled {
+        Some(next_schedule_time(&frequency)?)
+    } else {
+        None
+    };
     manager.with_connection(|connection| {
         connection.execute(
             "UPDATE recurring_workflows SET enabled=?2, next_run_at=?3, updated_at=?4 WHERE id=?1",
@@ -1816,8 +2186,13 @@ pub fn toggle_schedule(manager: &VaultManager, schedule_id: &str, enabled: bool)
 
 pub fn delete_schedule(manager: &VaultManager, schedule_id: &str) -> Result<Value, VaultError> {
     manager.with_connection(|connection| {
-        let changed = connection.execute("DELETE FROM recurring_workflows WHERE id=?1", params![schedule_id])?;
-        if changed == 0 { return Err(VaultError::NotFound); }
+        let changed = connection.execute(
+            "DELETE FROM recurring_workflows WHERE id=?1",
+            params![schedule_id],
+        )?;
+        if changed == 0 {
+            return Err(VaultError::NotFound);
+        }
         Ok(())
     })?;
     Ok(json!({ "id": schedule_id, "deleted": true }))
@@ -1830,9 +2205,14 @@ pub fn run_due_schedules(manager: &VaultManager) -> Result<Value, VaultError> {
              WHERE enabled=1 AND next_run_at IS NOT NULL AND next_run_at <= ?1",
         )?;
         let rows = statement.query_map(params![now()], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
         })?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(VaultError::from)
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(VaultError::from)
     })?;
     let mut results = Vec::new();
     for (schedule_id, goal, frequency) in due {

@@ -115,7 +115,9 @@ config/
 src-tauri/
   src/vault.rs               خزنة SQLCipher أصلية وArgon2 ومخطط البيانات
   src/runtime.rs             سير العمل وA2A والمزودون والمهارات والترحيل والفرق والجداول
+  Cargo.lock                 قفل dependency graph الأصلي القابل لإعادة الإنتاج
   tauri.conf.json            حزم Windows/macOS/Linux/Android/iOS
+rust-toolchain.toml           تثبيت Rust 1.88.0 للمطور وCI
 server.py                    الخادم والمحرك وSQLite وPolicy Gate
 cto_agent.py                 بوابة Orion CTO المقيدة وموصلات inference للجلسة
 docs/
@@ -153,7 +155,7 @@ Authorization: Bearer <ATLANTISX_COMMANDER_KEY>
 ## حدود الأمان الحالية
 
 - يحفظ خادم الويب runtime في `.atlantisx/atlantisx.db` باستخدام SQLite وWAL؛ الملف مستبعد من Git لكنه **غير مشفر**، لذلك لا يخزن أسرارًا.
-- خزنة التطبيق الأصلي في `src-tauri` تستخدم SQLCipher لتشفير قاعدة البيانات كاملة وArgon2 لاشتقاق المفتاح. لم تُبنَ الحزم الأصلية في هذه البيئة لغياب Rust وSDKs والتوقيع.
+- خزنة التطبيق الأصلي في `src-tauri` تستخدم SQLCipher لتشفير قاعدة البيانات كاملة وArgon2 لاشتقاق المفتاح. ثُبّتت تبعيات Rust في `Cargo.lock` وضُبط المصدر بـ`rustfmt` حقيقي، لكن لم تُبنَ الحزم الأصلية لأن تنزيل crate payloads ومكتبات المنصة وSDKs والتوقيع غير متاح في هذه البيئة.
 - لا تحفظ مفاتيح API داخل المستودع أو قاعدة Runtime غير المشفرة. جلسة CTO في الويب تحتفظ بمفتاح واحد في ذاكرة عملية Python فقط حتى disconnect أو restart؛ أما التخزين الدائم الآمن فهو للخزنة الأصلية SQLCipher بعد بناء Tauri.
 - endpoint المزود المستضاف مقيد بنطاق المزود المختار وHTTPS/443؛ وendpoint المحلي مقيد بـHTTP loopback. لا تُتبع redirects وتُحد الاستجابة بـ1 MiB.
 - `config/capabilities.json` يبقي كل قدرة خارجية معطلة حتى تمر الموافقة وفحص الصحة وخطة الرجوع.

@@ -220,14 +220,16 @@ Until then, deterministic workflow stages are state transitions and audit record
 
 ## 8. Native release procedure and remaining work
 
-The repository contains Tauri 2 / Rust / SQLCipher source at package revision 2.4.0. It has not been compiled in the current environment. `npm ci` and the repository-local Tauri CLI 2.11.4 are verified, and `npm run native:info` completes successfully; its environment report confirms that `rustc`, Cargo, `webkit2gtk-4.1`, and `rsvg2` are missing. `npm run native:build` was attempted and stopped before compilation because the CLI could not execute `cargo metadata`. Android/iOS SDK and signing prerequisites are also unavailable. Diagnostic or dependency-install success is not a native build.
+The repository contains Tauri 2 / Rust / SQLCipher source at package revision 2.4.0. It has not been compiled in the current environment. `npm ci` and the repository-local Tauri CLI 2.11.4 are verified. The host has no persistent system Rust installation, Linux GUI prerequisites, Android SDK, or Apple SDK/signing tools, and both Rustup and Debian package endpoints are unreachable. The first `npm run native:build` attempt therefore stopped before compilation because the CLI could not execute `cargo metadata`.
+
+A temporary Rust 1.88.0 toolchain assembled from npm-carried component archives subsequently enabled authentic formatting and resolution checks. `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check` now passes. Cargo resolved 474 packages from the official crates.io Git index and produced `src-tauri/Cargo.lock`; regenerating it offline against the fetched index produced an identical lockfile with SHA-256 `1db313163175d645ac3bb302212e4cce283bc03638edc2ffadd902a374b956ca`. The graph's highest declared dependency MSRV is 1.88.0, which is pinned in `rust-toolchain.toml`, `Cargo.toml`, and the CI template. A locked, unsigned Tauri `deb` build accepted its runner arguments and reached Cargo, then stopped before compilation at the unavailable `adler2 v2.0.1` archive. Type-check/build remains blocked because crate payload downloads from `static.crates.io` and tested mirrors fail TLS, and the platform libraries remain absent. Formatting, lock resolution, diagnostics, or dependency-install success is not a native build. A preliminary RustSec version screen found no vulnerability-class match and 17 informational findings (one unsoundness and 16 unmaintained-crate notices); the CI template runs pinned `cargo-audit 0.22.2` to perform the authoritative lockfile check, expose those warnings, and fail vulnerability advisories.
 
 A multi-platform, no-production-signing CI definition is available at `docs/workflows/native-build.yml.example`. It remains inert until a repository owner copies it to `.github/workflows/native-build.yml`. GitHub rejected the current App's direct workflow push because the installation does not have the `workflows` permission. Grant **Workflows: Read and write** to that App (then approve/reconnect the installation), or install the file through another owner-controlled GitHub identity with workflow-management permission. The active definition can then be dispatched manually. Treat its desktop bundles, Android debug APK, and iOS simulator app as short-lived verification evidence, never as a public signed release.
 
 ### Desktop
 
-1. Install Rust 1.77.2+ and Tauri system prerequisites on each target OS.
-2. Run `npm ci`, `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check`, `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`, `cargo test --manifest-path src-tauri/Cargo.toml`, and `npm run native:build`.
+1. Install the pinned Rust 1.88.0 toolchain and Tauri system prerequisites on each target OS.
+2. Run `npm ci`, `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check`, `cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings`, `cargo test --locked --manifest-path src-tauri/Cargo.toml`, and `npm run native:build -- -- --locked`.
 3. Test vault create/unlock/lock, wrong key, schema migration, crash recovery, provider health, and workflow concurrency.
 4. Sign Windows artifacts with Authenticode.
 5. Sign and notarize macOS artifacts with Apple Developer credentials.
@@ -236,14 +238,14 @@ A multi-platform, no-production-signing CI definition is available at `docs/work
 ### Android
 
 1. Use a trusted builder with Java, Android SDK/NDK, Rust Android targets, and a release keystore held in encrypted CI secrets.
-2. Run `npm run native:android:init` and `npm run native:android:build`.
+2. Run `npm run native:android:init` and `npm run native:android:build -- -- --locked`.
 3. Test background suspension, process death, vault relock, network permission, update, and rollback on physical devices.
 4. Produce a signed AAB/APK, checksums, privacy disclosure, and Play release evidence.
 
 ### iOS
 
 1. Use macOS with Xcode, Apple Developer identity, and provisioning profiles stored outside Git.
-2. Run `npm run native:ios:init` and `npm run native:ios:build`.
+2. Run `npm run native:ios:init` and `npm run native:ios:build -- -- --locked`.
 3. Test Keychain/biometric wrapping decisions, app suspension, protected-data availability, backup policy, and device restore.
 4. Archive, sign, and submit through TestFlight before public release.
 

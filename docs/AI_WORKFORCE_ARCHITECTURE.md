@@ -1,4 +1,4 @@
-# Atlantis-X AI Workforce v2.3
+# Atlantis-X AI Workforce v2.4
 
 ## Operating model
 
@@ -32,9 +32,11 @@ In the web PWA, Orion has two explicit modes:
 
 Provider credentials are never part of shared truth. One web credential is retained in Python process memory only and is omitted from state, task plans, SQLite and audit records. The model receives bounded counts/role IDs and at most four sanitized prior Orion plan summaries rather than the database. Full prior answers, provider payloads and audit logs are excluded, common credential assignments are redacted, and continuity is explicitly context rather than authority. Provider inference can produce an answer and an ordered delegation plan across all 11 roles, including rationale, deliverable, dependencies, effort, acceptance criteria and success metrics, but exposes no filesystem, browser, payment, publication or deployment tool. The deterministic classifier and model risk signal independently escalate approval; neither can bypass Commander authority.
 
+The Commander can refine a persisted Orion plan without creating a disconnected second task. Orion receives the original goal plus one bounded current-plan summary and the refinement instruction, then must return a complete replacement plan. Atlantis-X assigns a monotonic revision number, retains no more than six redacted prior-revision summaries, discards the prior full answer, recomputes delegation queues, and rebuilds the workflow from `PLAN`. Existing approval requirements are sticky: a later model response cannot downgrade them. The UI and Markdown brief report model inference and plan persistence separately from external-execution evidence, which remains false.
+
 ## Shared truth
 
-`config/workforce.json` is the v2.3 workforce registry and the source of truth for every employee's identity, mission, skills, scoped memory contract, tools, permissions, KPIs, queue policy, communication channels, reporting line and escalation path. The local API combines that registry with runtime directives and derives each employee's live queue items, active count and Commander-waiting count.
+`config/workforce.json` is the v2.4 workforce registry and the source of truth for every employee's identity, mission, skills, scoped memory contract, tools, permissions, KPIs, queue policy, communication channels, reporting line and escalation path. The local API combines that registry with runtime directives and derives each employee's live queue items, active count and Commander-waiting count.
 
 The intended production knowledge core is:
 
@@ -45,7 +47,7 @@ The intended production knowledge core is:
 
 The Command Center never labels an external integration as connected unless its credentials and health check are confirmed. In v2, GitHub is reported as locally available; Notion, Airtable and PostHog remain pending.
 
-## Agent Runtime v2.3
+## Agent Runtime v2.4
 
 Every task owns a persisted workflow with seven explicit stages:
 

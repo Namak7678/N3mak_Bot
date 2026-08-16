@@ -589,7 +589,7 @@ pub fn state(manager: &VaultManager) -> Result<Value, VaultError> {
         "generated_at": now(),
         "connected": true,
         "engine": "native",
-        "version": "2.3.1-native",
+        "version": "2.4.0-native",
         "execution_mode": "auditable_native_local_sandbox",
         "a2a": {
             "protocol": "atlantis-local-a2a-v1",
@@ -1237,7 +1237,7 @@ fn http_client() -> Result<Client, VaultError> {
         .connect_timeout(StdDuration::from_secs(8))
         .timeout(StdDuration::from_secs(20))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("Atlantis-X/2.3.1")
+        .user_agent("Atlantis-X/2.4.0")
         .build()
         .map_err(|_| invalid("unable to create the provider HTTP client"))
 }

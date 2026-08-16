@@ -1,6 +1,6 @@
 [package]
 name = "atlantis-x"
-version = "2.3.1"
+version = "2.4.0"
 description = "Native local-first core for the Atlantis-X personal AI agent"
 authors = ["Atlantis-X"]
 edition = "2021"

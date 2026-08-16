@@ -1192,23 +1192,65 @@ function showCtoCommandResult(result) {
   const metrics = (plan.success_metrics || []).length
     ? `<div><span class="section-kicker">SUCCESS METRICS</span><div class="command-plan">${plan.success_metrics.map((item, index) => `<div><i>M${index + 1}</i><span>${escapeHTML(item)}</span></div>`).join("")}</div></div>`
     : "";
+  const historyItems = Array.isArray(result.task.cto_revision_history)
+    ? result.task.cto_revision_history.slice().reverse()
+    : [];
+  const revisionHistory = historyItems.length
+    ? `<details class="cto-revision-history"><summary>REVISION HISTORY · ${historyItems.length} BOUNDED SUMMARIES</summary><div>${historyItems.map(item => `<article><b>R${escapeHTML(item.revision)} · ${escapeHTML(item.risk_level || "unknown")} risk</b><span>${escapeHTML(item.executive_summary)}</span><small>Replaced by: ${escapeHTML(item.replaced_by_instruction)}</small></article>`).join("")}</div></details>`
+    : "";
+  const revision = Number(plan.revision || 1);
   const continuity = plan.continuity?.items_used
-    ? `Continuity: ${plan.continuity.items_used} bounded prior plan summaries used as context only.`
+    ? `Continuity: ${plan.continuity.items_used} bounded ${plan.continuity.scope === "current_task_plan_summary" ? "current-plan" : "prior-plan"} summaries used as context only.`
     : "Continuity: no prior Orion plan summary was used.";
   $("#command-result").innerHTML = `<div class="cto-result">
     <div class="dialog-result-icon ${approval ? "approval" : ""}">${icon(approval ? "lock" : "spark")}</div>
-    <div class="command-result-head"><span class="section-kicker ${approval ? "amber" : ""}">ORION CTO · ${escapeHTML(plan.provider.name)} / ${escapeHTML(plan.provider.model)}</span><h2>${escapeHTML(plan.executive_summary)}</h2><p>${escapeHTML(result.message)}</p></div>
+    <div class="command-result-head"><span class="section-kicker ${approval ? "amber" : ""}">ORION CTO · REVISION ${revision} · ${escapeHTML(plan.provider.name)} / ${escapeHTML(plan.provider.model)}</span><h2>${escapeHTML(plan.executive_summary)}</h2><p>${escapeHTML(result.message)}</p></div>
     <div class="command-ticket"><span>${escapeHTML(result.task.title)}</span><b>${escapeHTML(result.task.id)} · RISK ${escapeHTML(plan.risk_level).toUpperCase()}${approval ? " · COMMANDER APPROVAL" : " · PLAN STAGED"}</b></div>
     <div class="cto-answer">${escapeHTML(plan.answer)}</div>
     ${delegations ? `<div><span class="section-kicker">ORDERED INTERNAL EXECUTION PLAN</span><div class="cto-plan-list">${delegations}</div></div>` : ""}
     ${metrics}
     ${assumptions}
+    ${revisionHistory}
     <div class="cto-next-action"><b>NEXT ACTION · </b>${escapeHTML(plan.next_action)}</div>
     <div class="cto-continuity-note">${escapeHTML(continuity)}</div>
+    <div class="cto-evidence-note"><b>VERIFIED EVIDENCE</b><span>Model inference: verified · Plan persistence: ${plan.evidence?.plan_persisted ? "verified" : "not verified"} · External execution: not performed or verified</span></div>
     <div class="cto-result-boundary">${icon("shield")}<span>${escapeHTML(plan.execution_boundary)}</span></div>
+    <div class="cto-refine-panel"><label for="cto-refine-input"><b>REFINE WITH ORION</b><span>Ask for a safer, clearer, cheaper, faster, or otherwise revised plan. Orion replaces the plan and resets prior workflow approvals.</span></label><textarea id="cto-refine-input" maxlength="500" rows="3" placeholder="Example: Reduce this to a two-week MVP, add measurable security acceptance tests, and preserve every approval gate."></textarea><button class="dialog-action" data-refine-cto>Generate plan revision ${revision + 1}</button></div>
     <div class="cto-result-actions"><button class="dialog-action cto-export-action" data-export-cto>${icon("download")} Download execution brief (.md)</button><button class="dialog-action" data-go-view="runtime" data-close-dialog>${approval ? "Review Commander approval gate" : "Open auditable staged workflow"}</button></div>
   </div>`;
-  $("#command-dialog").showModal();
+  const dialog = $("#command-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+async function refineCtoPlan(button) {
+  const result = AX.lastCtoResult;
+  const input = $("#cto-refine-input");
+  const instruction = input?.value.trim() || "";
+  if (!result?.task?.id || !result?.cto_plan) {
+    toast("No persisted Orion plan is available to refine.", "error");
+    return;
+  }
+  if (instruction.length < 3) {
+    toast("Describe the plan change using at least three characters.", "error");
+    input?.focus();
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Orion is revising the plan…";
+  try {
+    const refined = await api(`/api/tasks/${result.task.id}/cto/refine`, {
+      method: "POST",
+      body: JSON.stringify({ instruction })
+    });
+    await loadState();
+    showCtoCommandResult(refined);
+    toast(`Orion staged plan revision ${refined.revision}. Prior workflow approvals were reset.`);
+  } catch (error) {
+    if (error.code === "CTO_PROVIDER_ERROR") openCtoDialog();
+    toast(error.message, "error");
+    button.disabled = false;
+    button.textContent = `Generate plan revision ${Number(result.cto_plan.revision || 1) + 1}`;
+  }
 }
 
 function downloadCtoBrief() {
@@ -1224,10 +1266,14 @@ function downloadCtoBrief() {
     `- Task: ${result.task.id}`,
     `- Goal: ${result.task.title}`,
     `- Generated: ${plan.generated_at || "not recorded"}`,
+    `- Revision: ${plan.revision || 1}`,
     `- Provider: ${plan.provider?.name || "unknown"} / ${plan.provider?.model || "unknown"}`,
     `- Risk: ${plan.risk_level}`,
     `- Commander approval required: ${result.requires_approval ? "yes" : "no"}`,
     `- Continuity summaries used: ${plan.continuity?.items_used || 0}`,
+    `- Model inference verified: ${plan.evidence?.model_inference_verified ? "yes" : "no"}`,
+    `- Plan persistence verified: ${plan.evidence?.plan_persisted ? "yes" : "no"}`,
+    "- External execution verified: no",
     "",
     "## Executive summary",
     "",
@@ -1259,6 +1305,16 @@ function downloadCtoBrief() {
   lines.push("", "## Assumptions", "");
   (plan.assumptions || []).forEach(item => lines.push(`- ${item}`));
   if (!(plan.assumptions || []).length) lines.push("- None supplied.");
+  const revisionHistory = Array.isArray(result.task.cto_revision_history)
+    ? result.task.cto_revision_history
+    : [];
+  if (revisionHistory.length) {
+    lines.push("", "## Bounded revision history", "");
+    revisionHistory.forEach(item => lines.push(
+      `- Revision ${item.revision} (${item.risk_level || "unknown"} risk): ${item.executive_summary}`,
+      `  - Replaced by instruction: ${item.replaced_by_instruction}`
+    ));
+  }
   lines.push(
     "",
     "## Next action",
@@ -1276,7 +1332,7 @@ function downloadCtoBrief() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `Atlantis-X-${result.task.id}-execution-brief.md`;
+  link.download = `Atlantis-X-${result.task.id}-r${plan.revision || 1}-execution-brief.md`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -1438,6 +1494,8 @@ function bindEvents() {
     if (event.target.closest("[data-close-install]")) $("#install-dialog")?.close();
     if (event.target.closest("[data-close-vault]")) closeNativeVault();
     if (event.target.closest("[data-export-cto]")) downloadCtoBrief();
+    const refineCtoButton = event.target.closest("[data-refine-cto]");
+    if (refineCtoButton) refineCtoPlan(refineCtoButton);
     if (event.target.closest("[data-close-dialog]")) event.target.closest("dialog")?.close();
 
     const integration = event.target.closest("[data-integration]");

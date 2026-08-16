@@ -108,6 +108,12 @@ class CtoAgentTests(unittest.TestCase):
         self.assertIn('api("/api/cto/disconnect"', frontend)
         self.assertIn('"/api/cto/run"', frontend)
         self.assertIn("downloadCtoBrief", frontend)
+        self.assertIn("refineCtoPlan", frontend)
+        self.assertIn("data-refine-cto", frontend)
+        self.assertIn("/cto/refine", frontend)
+        self.assertIn("VERIFIED EVIDENCE", frontend)
+        self.assertIn("REVISION HISTORY", frontend)
+        self.assertIn("Bounded revision history", frontend)
         self.assertIn("ORDERED INTERNAL EXECUTION PLAN", frontend)
         self.assertIn("SUCCESS METRICS", frontend)
         self.assertIn('"/cto.css"', service_worker)
@@ -219,6 +225,83 @@ class CtoAgentTests(unittest.TestCase):
             self.assertEqual(first["cto_plan"]["continuity"]["items_used"], 0)
             self.assertEqual(second["cto_plan"]["continuity"]["items_used"], 1)
             self.assertEqual(second["cto_plan"]["continuity"]["authority"], "context_only")
+
+    def test_cto_plan_refinement_replaces_plan_and_retains_bounded_redacted_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            transport = RecordingTransport("openai_compatible")
+            agent = CtoAgent(CATALOG, transport=transport)
+            engine = WorkforceEngine(
+                config_path=ROOT / "config" / "workforce.json",
+                runtime_path=Path(temp_dir) / "runtime.db",
+                cto_agent=agent,
+            )
+            agent.connect("openai", "https://api.openai.com/v1", "gpt-4.1-mini", "key", True, True)
+            first = engine.run_cto_goal("Build a secure product launch plan")
+            task_id = first["task"]["id"]
+            self.assertEqual(first["cto_plan"]["revision"], 1)
+            self.assertTrue(first["cto_plan"]["evidence"]["plan_persisted"])
+            self.assertFalse(first["cto_plan"]["evidence"]["external_execution_verified"])
+
+            revised_payload = plan_payload()
+            revised_payload["executive_summary"] = "A two-week MVP plan is ready."
+            revised_payload["next_action"] = "Approve the bounded MVP scope."
+            transport.plan = revised_payload
+            refined = engine.refine_cto_plan(
+                task_id,
+                "Reduce this to a two-week MVP; api_key=revision-history-secret",
+            )
+
+            prompt = transport.calls[-1]["body"]["messages"][0]["content"]
+            self.assertIn("complete replacement plan", prompt)
+            self.assertIn("Build a secure product launch plan", prompt)
+            self.assertIn("Reduce this to a two-week MVP", prompt)
+            self.assertIn(first["cto_plan"]["executive_summary"], prompt)
+            self.assertNotIn(first["cto_plan"]["answer"], prompt)
+            self.assertEqual(refined["task"]["id"], task_id)
+            self.assertEqual(refined["revision"], 2)
+            self.assertEqual(refined["cto_plan"]["revision"], 2)
+            self.assertEqual(refined["cto_plan"]["continuity"]["scope"], "current_task_plan_summary")
+            self.assertEqual(refined["executed"], ["provider_inference", "plan_revision_staged"])
+            self.assertEqual(refined["workflow"]["state"], "ready")
+            self.assertIn("reset prior workflow approvals", refined["workflow"]["audit"][0]["message"])
+            self.assertEqual(engine.get_state()["runtime"]["command_count"], 1)
+            self.assertNotIn("revision-history-secret", json.dumps(refined["task"]["cto_revision_history"]))
+            self.assertIn("[REDACTED]", json.dumps(refined["task"]["cto_revision_history"]))
+
+            for index in range(6):
+                refined = engine.refine_cto_plan(task_id, "Revision request {}".format(index + 3))
+            self.assertEqual(refined["revision"], 8)
+            self.assertEqual(len(refined["task"]["cto_revision_history"]), 6)
+            self.assertEqual(refined["task"]["cto_revision_history"][0]["revision"], 2)
+
+            persisted_before_failure = json.dumps(refined["task"]["cto_plan"], sort_keys=True)
+            transport.malformed_plan = provider_response("openai_compatible", "bad revision")
+            with self.assertRaises(CtoAgentError):
+                engine.refine_cto_plan(task_id, "Do not persist a failed revision")
+            current_task = next(task for task in engine.get_state()["tasks"] if task["id"] == task_id)
+            self.assertEqual(json.dumps(current_task["cto_plan"], sort_keys=True), persisted_before_failure)
+            self.assertEqual(current_task["cto_plan"]["revision"], 8)
+
+    def test_refinement_cannot_remove_an_existing_approval_requirement(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            transport = RecordingTransport(
+                "openai_compatible",
+                plan=plan_payload(risk="high", requires_approval=True),
+            )
+            agent = CtoAgent(CATALOG, transport=transport)
+            engine = WorkforceEngine(
+                config_path=ROOT / "config" / "workforce.json",
+                runtime_path=Path(temp_dir) / "runtime.db",
+                cto_agent=agent,
+            )
+            agent.connect("openai", "https://api.openai.com/v1", "gpt-4.1-mini", "key", True, True)
+            first = engine.run_cto_goal("Plan a high-risk production migration")
+            self.assertTrue(first["requires_approval"])
+            transport.plan = plan_payload(risk="low", requires_approval=False)
+            refined = engine.refine_cto_plan(first["task"]["id"], "Make the preparation safer")
+            self.assertTrue(refined["requires_approval"])
+            self.assertFalse(refined["accepted"])
+            self.assertTrue(refined["workflow"]["policy"]["requires_approval"])
 
     def test_credential_is_session_only_sanitized_and_forgotten(self):
         transport = RecordingTransport("openai_compatible")
@@ -426,7 +509,7 @@ class CtoHttpRouteTests(unittest.TestCase):
         status_code, readiness = self.get("/api/readiness")
         self.assertEqual(status_code, 200)
         self.assertTrue(readiness["ready"])
-        self.assertEqual(readiness["version"], "2.3.1")
+        self.assertEqual(readiness["version"], "2.4.0")
         checks = {item["id"]: item for item in readiness["checks"]}
         self.assertTrue(checks["runtime_database"]["ok"])
         self.assertTrue(checks["external_automation_lock"]["ok"])
@@ -457,6 +540,19 @@ class CtoHttpRouteTests(unittest.TestCase):
         self.assertEqual(result["task"]["source"], "ORION AI CTO")
         self.assertEqual(result["executed"], ["provider_inference", "plan_staged"])
         self.assertNotIn("route-test-secret", json.dumps(result))
+
+        self.transport.plan = plan_payload()
+        self.transport.plan["executive_summary"] = "The route-backed revision is ready."
+        status_code, refined = self.post(
+            "/api/tasks/{}/cto/refine".format(result["task"]["id"]),
+            {"instruction": "Add a measurable two-week boundary"},
+        )
+        self.assertEqual(status_code, 200)
+        self.assertTrue(refined["refined"])
+        self.assertEqual(refined["revision"], 2)
+        self.assertEqual(refined["task"]["cto_plan"]["revision"], 2)
+        self.assertEqual(self.engine.get_state()["runtime"]["command_count"], 1)
+        self.assertNotIn("route-test-secret", json.dumps(refined))
 
         request = Request(
             self.base_url + "/api/state",

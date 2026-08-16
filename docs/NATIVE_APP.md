@@ -31,9 +31,9 @@ A PWA still connects to its hosted Atlantis-X API. It does not receive unrestric
 
 This native source is deliberately separate from the development web server's unencrypted SQLite database. Secrets must never be copied into the browser runtime store.
 
-The source package metadata is reconciled at **2.3.1**, and native state identifies the engine as `2.3.1-native`. These values describe the source revision only; they are not evidence of compilation, signing, installation, or target-device verification.
+The source package metadata is reconciled at **2.4.0**, and native state identifies the engine as `2.4.0-native`. These values describe the source revision only; they are not evidence of compilation, signing, installation, or target-device verification.
 
-The Rust source has not been compiled in this repository environment because Rust and the platform GUI SDKs are unavailable here. It must pass compilation and target-device validation before it is described as a distributable native application.
+The Rust source has not been compiled in this repository environment because Rust and the platform GUI SDKs are unavailable here. Dependency installation and `npm run native:info` do work with the pinned Tauri CLI 2.11.4; the diagnostic explicitly reports missing `rustc`, Cargo, `webkit2gtk-4.1`, and `rsvg2`. A direct `npm run native:build` attempt stops before compilation when Tauri cannot run `cargo metadata`. Android and Apple SDK/signing tools are also absent. It must pass compilation and target-device validation before it is described as a distributable native application.
 
 ## Why signed binaries are not committed
 

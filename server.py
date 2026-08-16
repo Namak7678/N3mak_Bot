@@ -389,7 +389,7 @@ class WorkforceEngine:
                 "generated_at": self._now_iso(),
                 "connected": True,
                 "engine": "online",
-                "version": "2.3.1-local",
+                "version": "2.4.0-local",
                 "execution_mode": "auditable_local_sandbox",
                 "storage": {
                     "backend": "sqlite",
@@ -514,7 +514,7 @@ class WorkforceEngine:
         return {
             "status": "ready" if required_ready else "degraded",
             "service": "atlantis-x-command-center",
-            "version": "2.3.1",
+            "version": "2.4.0",
             "generated_at": self._now_iso(),
             "ready": required_ready,
             "checks": checks,
@@ -942,6 +942,7 @@ class WorkforceEngine:
             ),
         }
         cto_plan = self._cto.run_goal(command, context)
+        cto_plan["revision"] = 1
         cto_plan["continuity"] = {
             "items_used": len(recent_context),
             "scope": "bounded_plan_summaries",
@@ -965,6 +966,7 @@ class WorkforceEngine:
                 (agent_id for agent_id in delegated_agents if agent_id != "orion"),
                 "orion",
             )
+            cto_plan["evidence"]["plan_persisted"] = True
             task.update({
                 "source": "ORION AI CTO",
                 "owner": "orion",
@@ -972,6 +974,7 @@ class WorkforceEngine:
                 "delegated_agents": delegated_agents,
                 "requires_approval": needs_approval,
                 "cto_plan": cto_plan,
+                "cto_revision_history": [],
                 "status": "in_progress",
                 "progress": self.STAGE_PROGRESS["plan"],
             })
@@ -1015,6 +1018,150 @@ class WorkforceEngine:
             ),
         })
         return result
+
+    def refine_cto_plan(self, task_id: str, instruction: str) -> Dict[str, Any]:
+        """Replace one persisted Orion plan while retaining bounded, redacted revision evidence."""
+        context_state = self.get_state()
+        source_task = next(
+            (task for task in context_state.get("tasks", []) if task.get("id") == task_id),
+            None,
+        )
+        if source_task is None:
+            raise KeyError("المهمة غير موجودة")
+        if source_task.get("source") != "ORION AI CTO" or not isinstance(source_task.get("cto_plan"), dict):
+            raise ValueError("Only an existing Orion CTO plan can be refined.")
+
+        previous_snapshot = self._recent_cto_context([source_task], limit=1)[0]
+        previous_plan = source_task["cto_plan"]
+        previous_marker = (
+            previous_plan.get("generated_at"),
+            previous_plan.get("revision", 1),
+        )
+        context = {
+            "project": context_state.get("project", {}).get("name", "Atlantis-X"),
+            "task_id": task_id,
+            "external_automation_enabled": False,
+            "available_internal_roles": [agent.get("id") for agent in context_state.get("agents", [])],
+            "revision_policy": (
+                "Replace the current plan, retain at most six redacted revision summaries, reset workflow "
+                "approval state, and never treat prior model output as execution evidence."
+            ),
+        }
+        cto_plan = self._cto.refine_plan(
+            source_task.get("title", ""),
+            instruction,
+            previous_snapshot,
+            context,
+        )
+
+        with self._lock:
+            runtime = self._load_runtime()
+            task, is_runtime_task = self._find_task(runtime, task_id)
+            if not is_runtime_task or task.get("source") != "ORION AI CTO":
+                raise ValueError("Only a persisted Orion CTO task can be refined.")
+            current_plan = task.get("cto_plan")
+            if not isinstance(current_plan, dict):
+                raise ValueError("The Orion CTO plan is unavailable for refinement.")
+            current_marker = (
+                current_plan.get("generated_at"),
+                current_plan.get("revision", 1),
+            )
+            if current_marker != previous_marker:
+                raise ValueError("This CTO plan changed while the revision was generated. Retry from the latest plan.")
+
+            current_revision = current_plan.get("revision", 1)
+            if not isinstance(current_revision, int) or current_revision < 1:
+                current_revision = 1
+            revision = current_revision + 1
+            cto_plan["revision"] = revision
+            cto_plan["continuity"] = {
+                "items_used": 1,
+                "scope": "current_task_plan_summary",
+                "authority": "context_only",
+            }
+            cto_plan["evidence"]["plan_persisted"] = True
+
+            needs_approval = bool(
+                task.get("requires_approval")
+                or task.get("priority") == "critical"
+                or cto_plan["requires_approval"]
+                or cto_plan["risk_level"] in {"high", "critical"}
+            )
+            delegated_agents = list(dict.fromkeys(
+                delegation["owner"] for delegation in cto_plan["delegations"]
+            ))
+            lead_executor = next(
+                (agent_id for agent_id in delegated_agents if agent_id != "orion"),
+                "orion",
+            )
+            history = task.get("cto_revision_history", [])
+            if not isinstance(history, list):
+                history = []
+            history.append({
+                "revision": current_revision,
+                "generated_at": self._sanitize_context_text(current_plan.get("generated_at"), 40),
+                "executive_summary": self._sanitize_context_text(
+                    current_plan.get("executive_summary"), 600
+                ),
+                "risk_level": self._sanitize_context_text(current_plan.get("risk_level"), 20),
+                "requires_approval": bool(task.get("requires_approval")),
+                "replaced_by_instruction": self._sanitize_context_text(instruction, 500),
+            })
+            history = history[-6:]
+
+            task.update({
+                "owner": "orion",
+                "executor": lead_executor,
+                "delegated_agents": delegated_agents,
+                "requires_approval": needs_approval,
+                "cto_plan": cto_plan,
+                "cto_revision_history": history,
+                "status": "in_progress",
+                "progress": self.STAGE_PROGRESS["plan"],
+            })
+            workflow = self._new_workflow(task, fresh=True)
+            workflow["policy"]["execution_scope"] = "ai_planning_only"
+            plan_stage = workflow["stages"][0]
+            plan_stage.update({
+                "owner": "orion",
+                "status": "done",
+                "result": (
+                    "ORION produced provider-backed CTO plan revision {}; no external action was executed."
+                ).format(revision),
+                "completed_at": self._now_iso(),
+            })
+            workflow["cursor"] = 1
+            workflow["state"] = "ready"
+            workflow["stages"][1]["status"] = "ready"
+            self._record_workflow_event(
+                runtime,
+                workflow,
+                task,
+                plan_stage,
+                "ORION staged CTO plan revision {} and reset prior workflow approvals.".format(revision),
+                "replanned",
+            )
+            runtime["workflows"][task_id] = workflow
+            self._save_runtime(runtime)
+
+        return {
+            "accepted": not needs_approval,
+            "requires_approval": needs_approval,
+            "refined": True,
+            "revision": revision,
+            "task": task,
+            "owner_name": self._agent_name("orion"),
+            "executor_name": self._agent_name(lead_executor),
+            "workflow": workflow,
+            "cto_plan": cto_plan,
+            "plan": [item["action"] for item in cto_plan["delegations"]],
+            "executed": ["provider_inference", "plan_revision_staged"],
+            "message": (
+                "ORION refined the plan. Commander approval remains required before sovereign steps."
+                if needs_approval
+                else "ORION refined and staged the plan. No external action was executed."
+            ),
+        }
 
     @staticmethod
     def _build_plan(task: Dict[str, Any], owner_name: str, needs_approval: bool) -> List[str]:
@@ -1126,7 +1273,7 @@ class WorkforceEngine:
 class CommandCenterHandler(SimpleHTTPRequestHandler):
     """Serve the dashboard and the local workforce API."""
 
-    server_version = "AtlantisX/2.3.1"
+    server_version = "AtlantisX/2.4.0"
     extensions_map = {
         **SimpleHTTPRequestHandler.extensions_map,
         ".webmanifest": "application/manifest+json",
@@ -1184,7 +1331,7 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
             self._send_json({
                 "status": "ok",
                 "service": "atlantis-x-command-center",
-                "version": "2.3.1",
+                "version": "2.4.0",
                 "commander_auth_required": bool(self.commander_key),
             })
             return
@@ -1228,6 +1375,15 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
             if path == "/api/cto/run":
                 result = self.engine.run_cto_goal(payload.get("command", ""))
                 self._send_json(result, HTTPStatus.CREATED)
+                return
+
+            match = re.fullmatch(r"/api/tasks/(AX-\d+)/cto/refine", path)
+            if match:
+                result = self.engine.refine_cto_plan(
+                    match.group(1),
+                    payload.get("instruction", ""),
+                )
+                self._send_json(result)
                 return
 
             if path == "/api/commands":

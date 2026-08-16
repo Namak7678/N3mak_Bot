@@ -1,4 +1,4 @@
-const CACHE_VERSION = "atlantis-x-shell-v2.3.1";
+const CACHE_VERSION = "atlantis-x-shell-v2.4.0";
 const APP_SHELL = [
   "/",
   "/index.html",

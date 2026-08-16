@@ -1,4 +1,4 @@
-# Atlantis-X v2.3.1 operations and execution runbook
+# Atlantis-X v2.4.0 operations and execution runbook
 
 This runbook explains what Atlantis-X actually executes, how to operate the installable PWA, how Orion uses a connected model, and what remains required before native or external-automation release.
 
@@ -8,7 +8,7 @@ This runbook explains what Atlantis-X actually executes, how to operate the inst
 |---|---|---|---|
 | Web application | Installable PWA | Static shell, manifest, icons, service worker, API exclusion from cache | A PWA is not a signed desktop/mobile binary |
 | Local web runtime | Python + SQLite | State persistence, workflow gates, audit records, protected API, readiness checks | Web SQLite is not encrypted and must not contain credentials |
-| Orion CTO | Session-only BYOK | Six adapter families, live challenge gate, structured planning, bounded continuity | No provider account is connected by default |
+| Orion CTO | Session-only BYOK | Six adapter families, live challenge gate, structured planning, bounded continuity, bounded plan revisions | No provider account is connected by default |
 | Internal workforce | 11 coordinated roles | Orion delegates one ordered plan and remains accountable to the Commander | Delegation does not execute an external tool |
 | Native application | Tauri/SQLCipher source | Source-level vault/runtime/provider implementation and configuration | Rust source is uncompiled here; no installer is ready |
 | External automation | Disabled | Seven capabilities remain default-deny | No browser, desktop, payment, publishing, or deployment effect is enabled |
@@ -32,7 +32,24 @@ This runbook explains what Atlantis-X actually executes, how to operate the inst
 8. Orion remains the accountable owner. The first non-Orion delegate becomes lead executor, while every unique delegate sees the task in its queue.
 9. Deterministic sovereign-term checks and model risk are combined conservatively. Either can require Commander approval.
 10. The plan is staged with `execution_scope: ai_planning_only`; no external side effect is reported as executed.
-11. The UI renders the detailed steps and can download a portable Markdown execution brief; downloading the file is a local browser action, not an external execution claim.
+11. Evidence is recorded in separate fields: provider inference succeeded, plan persistence succeeded, and external execution was neither performed nor verified.
+12. The UI renders the detailed steps and can download a portable Markdown execution brief; downloading the file is a local browser action, not an external execution claim.
+
+### When the Commander refines an existing plan
+
+1. The result dialog sends the task ID and a bounded instruction to `POST /api/tasks/{id}/cto/refine`.
+2. The server accepts only a persisted `ORION AI CTO` task. It captures the plan's generation marker and revision number before inference.
+3. Orion receives the original goal, one sanitized summary of the current plan, registered role IDs, and the Commander's instruction. The full previous answer is excluded.
+4. The prompt requires a complete replacement plan—not a patch—using the same detailed schema and all safety gates.
+5. If provider inference or normalization fails, the persisted task is untouched.
+6. Before writing, the server verifies that the plan marker has not changed concurrently. A stale revision is rejected and must be retried from the latest plan.
+7. The new plan receives the next monotonic revision number. Delegated queues and lead executor are recomputed.
+8. Existing approval requirements are preserved even if the replacement model response reports lower risk. New high-risk output can add an approval requirement.
+9. The old full plan is replaced. Only a bounded, redacted history of the latest six revision summaries is retained.
+10. Workflow approvals and stage progress are reset: the replacement plan is recorded as a completed planning stage, while external execution remains disabled.
+11. The UI shows the revision and evidence boundary, and the downloaded Markdown brief includes both.
+
+This design gives the Commander an iterative planning loop without representing model text as completed work, replaying full prior answers, accumulating unbounded memory, or allowing a revision to inherit stale approval evidence.
 
 ### Without a verified provider
 
@@ -52,10 +69,11 @@ No Docker or terminal is required for a hosted end user.
 8. Enter the user's own key, grant model-only access, and confirm disconnect-and-forget rollback.
 9. Select **Verify provider & activate CTO**. The LIVE state appears only after the provider returns exactly `ATLANTIS_OK` to a real inference request.
 10. Enter a goal. Review risk, assumptions, metrics, ordered steps, dependencies, acceptance checks, and the explicit no-side-effect boundary.
-11. Download the `.md` brief when a portable execution plan is needed.
-12. Disconnect Orion when finished. This clears the key from server-process memory.
+11. To revise it, enter one specific instruction in **REFINE WITH ORION**. Review the incremented revision and reset approval state before proceeding.
+12. Confirm **VERIFIED EVIDENCE** still says that external execution was not performed, then download the `.md` brief when a portable execution plan is needed.
+13. Disconnect Orion when finished. This clears the key from server-process memory.
 
-The web key is session-only. Process restart also forgets it. Do not enter provider secrets into the goal itself.
+The web key is session-only. Process restart also forgets it. Do not enter provider secrets into the goal or a refinement instruction.
 
 ## 4. Operator deployment procedure
 
@@ -202,7 +220,7 @@ Until then, deterministic workflow stages are state transitions and audit record
 
 ## 8. Native release procedure and remaining work
 
-The repository contains Tauri 2 / Rust / SQLCipher source at package revision 2.3.1. It has not been compiled in the current environment.
+The repository contains Tauri 2 / Rust / SQLCipher source at package revision 2.4.0. It has not been compiled in the current environment. `npm ci` and the repository-local Tauri CLI 2.11.4 are verified, and `npm run native:info` completes successfully; its environment report confirms that `rustc`, Cargo, `webkit2gtk-4.1`, and `rsvg2` are missing. `npm run native:build` was attempted and stopped before compilation because the CLI could not execute `cargo metadata`. Android/iOS SDK and signing prerequisites are also unavailable. Diagnostic or dependency-install success is not a native build.
 
 ### Desktop
 

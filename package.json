@@ -1,7 +1,7 @@
 {
   "name": "atlantis-x",
   "private": true,
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "Local-first personal AI agent and multi-agent Command Center",
   "scripts": {
     "native:info": "tauri info",

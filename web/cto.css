@@ -74,6 +74,22 @@
 .cto-plan-item > em svg { width: 9px; height: 9px; }
 .cto-next-action { padding: 10px; color: #a59476; border: 1px solid rgba(var(--amber-rgb), .15); border-radius: 8px; background: rgba(var(--amber-rgb), .025); font-size: 8px; line-height: 1.7; }
 .cto-continuity-note { color: #51635f; font: 600 6.5px "Manrope", sans-serif; }
+.cto-evidence-note { display: grid; gap: 4px; padding: 9px 10px; color: #718580; border: 1px solid rgba(115,239,180,.12); border-radius: 8px; background: rgba(115,239,180,.02); font-size: 7px; line-height: 1.6; }
+.cto-evidence-note b { color: #73cda3; font: 700 6px "Manrope", sans-serif; letter-spacing: .08em; }
+.cto-refine-panel { display: grid; gap: 8px; padding: 11px; border: 1px solid rgba(var(--aqua-rgb), .14); border-radius: 9px; background: rgba(var(--aqua-rgb), .022); }
+.cto-refine-panel label { display: grid; gap: 4px; }
+.cto-refine-panel label b { color: var(--aqua); font: 700 6.5px "Manrope", sans-serif; letter-spacing: .08em; }
+.cto-refine-panel label span { color: #60736e; font-size: 7px; line-height: 1.6; }
+.cto-refine-panel textarea { width: 100%; min-height: 62px; resize: vertical; padding: 9px 10px; color: #aabbb7; border: 1px solid var(--line); border-radius: 7px; outline: none; background: #080e15; font: 500 8px/1.65 "IBM Plex Sans Arabic", sans-serif; }
+.cto-refine-panel textarea:focus { border-color: rgba(var(--aqua-rgb), .35); box-shadow: 0 0 0 2px rgba(var(--aqua-rgb), .04); }
+.cto-refine-panel .dialog-action { width: 100%; margin: 0; }
+.cto-revision-history { border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.01); }
+.cto-revision-history summary { padding: 9px 10px; color: #687c77; cursor: pointer; font: 700 6.5px "Manrope", sans-serif; letter-spacing: .06em; }
+.cto-revision-history > div { display: grid; gap: 6px; padding: 0 9px 9px; }
+.cto-revision-history article { display: grid; gap: 3px; padding: 7px 8px; border: 1px solid rgba(255,255,255,.035); border-radius: 6px; }
+.cto-revision-history article b { color: #839590; font: 700 6px "Manrope", sans-serif; text-transform: uppercase; }
+.cto-revision-history article span { color: #687a76; font-size: 7px; line-height: 1.55; }
+.cto-revision-history article small { color: #526460; font-size: 6.5px; line-height: 1.5; }
 .cto-result-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
 .cto-result-actions .dialog-action { width: 100%; margin: 0; }
 .cto-export-action { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--aqua); border-color: rgba(var(--aqua-rgb), .2); background: rgba(var(--aqua-rgb), .035); }

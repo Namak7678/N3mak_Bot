@@ -49,7 +49,7 @@
 
 سيظهر Atlantis-X بأيقونته كتطبيق مستقل. يحتوي المشروع على `manifest.webmanifest` وService Worker وأيقونات PWA/Apple/Windows. واجهة التطبيق ذاتية الموارد ولا تجلب خطوطًا أو سكربتات من طرف ثالث، ولا يتم تخزين استجابات `/api` داخل Cache الخاص بالـService Worker.
 
-هذه نسخة PWA حقيقية قابلة للتثبيت. أما ملفات `.exe` و`.msi` و`.apk` و`.aab` و`.ipa` فتتطلب بناءً وتوقيعًا على Windows/Android/macOS؛ لا يحتوي المستودع على تنزيلات وهمية غير موقعة. راجع [`docs/NATIVE_APP.md`](docs/NATIVE_APP.md).
+هذه نسخة PWA حقيقية قابلة للتثبيت. أما ملفات `.exe` و`.msi` و`.apk` و`.aab` و`.ipa` فتتطلب بناءً وتوقيعًا على Windows/Android/macOS؛ لا يحتوي المستودع على تنزيلات وهمية غير موقعة. يتوفر تعريف CI متعدد المنصات كقالب غير نشط في `docs/workflows/native-build.yml.example` إلى أن يثبته مالك المستودع بصلاحية GitHub Workflows. راجع [`docs/NATIVE_APP.md`](docs/NATIVE_APP.md).
 
 ## تشغيل الخادم للمطور أو الاستضافة
 
@@ -122,6 +122,7 @@ docs/
   AI_WORKFORCE_ARCHITECTURE.md
   NATIVE_APP.md
   OPERATIONS_RUNBOOK.md       خطوات التشغيل والنشر والرجوع وبناء المنصات وقائمة قبول الإصدار
+  workflows/native-build.yml.example  قالب تحقق أصلي متعدد المنصات يثبته مالك المستودع
 tests/
   test_command_center.py     اختبارات المحرك المحلي
   test_cto_agent.py          موصلات CTO ودورة المفتاح والمخاطر ومسارات HTTP

@@ -222,6 +222,8 @@ Until then, deterministic workflow stages are state transitions and audit record
 
 The repository contains Tauri 2 / Rust / SQLCipher source at package revision 2.4.0. It has not been compiled in the current environment. `npm ci` and the repository-local Tauri CLI 2.11.4 are verified, and `npm run native:info` completes successfully; its environment report confirms that `rustc`, Cargo, `webkit2gtk-4.1`, and `rsvg2` are missing. `npm run native:build` was attempted and stopped before compilation because the CLI could not execute `cargo metadata`. Android/iOS SDK and signing prerequisites are also unavailable. Diagnostic or dependency-install success is not a native build.
 
+A multi-platform, no-production-signing CI definition is available at `docs/workflows/native-build.yml.example`. It remains inert until a repository owner copies it to `.github/workflows/native-build.yml`. GitHub rejected the current App's direct workflow push because the installation does not have the `workflows` permission. Grant **Workflows: Read and write** to that App (then approve/reconnect the installation), or install the file through another owner-controlled GitHub identity with workflow-management permission. The active definition can then be dispatched manually. Treat its desktop bundles, Android debug APK, and iOS simulator app as short-lived verification evidence, never as a public signed release.
+
 ### Desktop
 
 1. Install Rust 1.77.2+ and Tauri system prerequisites on each target OS.
@@ -273,4 +275,5 @@ No `.exe`, `.msi`, `.dmg`, `.apk`, `.aab`, or `.ipa` is ready until these target
 - `config/capabilities.json`: default-deny external-effect policy.
 - `config/providers.json`: provider catalog and suggested models.
 - `src-tauri`: uncompiled native source foundation.
+- `docs/workflows/native-build.yml.example`: owner-installable unsigned/development native verification pipeline.
 - `docs/NATIVE_APP.md`: native packaging/signing boundary.

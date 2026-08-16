@@ -35,6 +35,21 @@ The source package metadata is reconciled at **2.4.0**, and native state identif
 
 The Rust source has not been compiled in this repository environment because Rust and the platform GUI SDKs are unavailable here. Dependency installation and `npm run native:info` do work with the pinned Tauri CLI 2.11.4; the diagnostic explicitly reports missing `rustc`, Cargo, `webkit2gtk-4.1`, and `rsvg2`. A direct `npm run native:build` attempt stops before compilation when Tauri cannot run `cargo metadata`. Android and Apple SDK/signing tools are also absent. It must pass compilation and target-device validation before it is described as a distributable native application.
 
+## Owner-installable native verification workflow
+
+`docs/workflows/native-build.yml.example` is a least-privilege GitHub Actions template for the next compilation boundary. When an owner copies it to `.github/workflows/native-build.yml`, it will:
+
+- run the Python, JavaScript, JSON, policy, and Tauri environment checks first;
+- format, lint, test, and build the Rust source on Linux, Windows, and macOS runners;
+- request unsigned Linux deb/AppImage, Windows NSIS/MSI, and macOS app/DMG verification bundles;
+- generate a development-signed Android debug APK on an Android SDK/NDK runner;
+- generate and compile an iOS simulator application on a macOS/Xcode runner;
+- upload commit-scoped verification artifacts for 14 days without reading release-signing secrets.
+
+The workflow is intentionally a template rather than an active workflow. A direct push attempt by the current GitHub App was rejected by GitHub with: `refusing to allow a GitHub App to create or update workflow ... without workflows permission`. The repository owner must either grant the connected GitHub App **Workflows: Read and write** permission and reconnect/approve the installation, or copy the template into `.github/workflows/native-build.yml` through an owner-controlled account that may manage Actions workflows. No provider key, signing certificate, keystore, or Apple credential is needed for this verification phase.
+
+After installation, dispatch **Native build verification** from GitHub Actions or push a matching native-source change. A green job proves only the named compilation/package checks. Debug, unsigned, ad-hoc, or simulator artifacts are not production releases and must not be offered as signed downloads.
+
 ## Why signed binaries are not committed
 
 A trustworthy native release requires platform-controlled build and signing:

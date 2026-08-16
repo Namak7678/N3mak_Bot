@@ -1,7 +1,7 @@
 {
   "project": {
     "name": "Atlantis-X",
-    "version": "Workforce v2.2",
+    "version": "Workforce v2.3",
     "status": "operational",
     "health": 87,
     "operating_mode": "Autonomous by default · Human authority at the top",
@@ -55,13 +55,13 @@
     {
       "id": "orion",
       "name": "ORION",
-      "role": "AI Chief of Staff",
-      "role_ar": "رئيس الديوان والمنسّق العام",
+      "role": "Personal AI Chief Technology Officer",
+      "role_ar": "المدير التقني الشخصي والمنسّق العام",
       "division": "القيادة",
       "status": "active",
       "performance": 96,
       "workload": 72,
-      "mission": "تحويل توجيهات القائد إلى خطط تنفيذ منسقة، إدارة الاعتماديات، ورفع القرارات السيادية فقط.",
+      "mission": "العمل كمدير تقني AI واحد أمام القائد: تحليل الأهداف إلى استراتيجية وإجابات وخطط تقنية، تنسيق الموظفين المتخصصين، ورفع القرارات السيادية فقط.",
       "reports_to": "CEO / Commander",
       "current_task": "تجميع خطة التشغيل للأسبوع القادم",
       "tools": [
@@ -271,8 +271,8 @@
     {
       "id": "forge",
       "name": "FORGE",
-      "role": "AI CTO / Developer",
-      "role_ar": "المدير التقني والمطور",
+      "role": "AI Engineering Lead / Developer",
+      "role_ar": "قائد الهندسة والمطور",
       "division": "الهندسة",
       "status": "processing",
       "performance": 93,

@@ -81,7 +81,7 @@
       "adapter": "cohere",
       "auth": "bearer",
       "base_url": "https://api.cohere.com/v2",
-      "default_model": "command-r-plus",
+      "default_model": "command-a-plus-05-2026",
       "local": false,
       "status": "unconfigured"
     },

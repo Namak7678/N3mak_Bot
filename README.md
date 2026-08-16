@@ -1,13 +1,16 @@
 # Atlantis-X AI Command Center
 
-واجهة تشغيلية عربية لفريق **Atlantis-X AI Workforce v2.2**. يحوّل المشروع تصور «شركة AI داخل بيئة العمل» إلى مركز قيادة متكامل، مع سلطة CEO واحدة، سجل موظفين موحّد، محرك دورات مستقل، صفوف عمل، بوابات أمن وقرار، وسجل تدقيق دائم.
+واجهة تشغيلية عربية لفريق **Atlantis-X AI Workforce v2.3** يقوده **ORION** كمدير تقني AI واحد أمام المستخدم. يحوّل المشروع تصور «شركة AI داخل بيئة العمل» إلى مركز قيادة متكامل: يحدد القائد الهدف، يحلله Orion عبر نموذج حقيقي عند ربط BYOK، ثم ينسّق الفريق الداخلي ضمن بوابات أمن وقرار وسجل تدقيق دائم.
 
 ## ما تم بناؤه
 
 - لوحة قيادة RTL داكنة ومتجاوبة لحالة المشروع والمهام ومسارات العمل.
 - تطبيق PWA قابل للتثبيت بأيقونة مستقلة على Windows وAndroid وiPhone/iPad وmacOS وLinux.
 - 11 موظف AI بعقد تشغيلي كامل: هوية ومهمة ومهارات وذاكرة محددة النطاق وأدوات وصلاحيات وKPIs وصف حي وقنوات تواصل وتسلسل تقارير وتصعيد.
-- قناة CEO → Orion تنشئ توجيهًا وتوزعه ثم تشغّل المراحل المحلية الآمنة تلقائيًا.
+- قناة CEO → Orion واحدة: Orion هو الـAI CTO المسؤول أمام المستخدم ويُفوّض داخليًا إلى الموظفين المتخصصين بدل مطالبة المستخدم بإدارة أدوات منفصلة.
+- إعداد BYOK رسومي داخل التطبيق يدعم ست عائلات API فعلية: OpenAI-compatible وAzure OpenAI وAnthropic وGemini وCohere وOllama.
+- اتصال الويب لا يُفعّل إلا بعد إذن القائد، تأكيد الرجوع، ونجاح استدلال health challenge حقيقي. المفتاح يبقى في ذاكرة عملية الخادم لهذه الجلسة فقط، ولا يُكتب إلى SQLite أو Git أو App Shell.
+- هدف المستخدم ينتقل إلى `/api/cto/run` فقط عندما تكون جلسة النموذج متصلة؛ وإلا يبقى Orion في وضع التنسيق الحتمي المحلي بوسم واضح.
 - دورة حالات كاملة: `PLAN → EXECUTE → REVIEW → SECURITY → APPROVAL → RELEASE → COMPLETE`.
 - تشغيل مستقل افتراضيًا حتى الاكتمال أو حتى أقرب بوابة سيادية.
 - سجل Audit لكل انتقال وتغيير يدوي وقرار، مع المنفّذ والنتيجة والتوقيت.
@@ -18,7 +21,17 @@
 - مصدر Tauri 2 أصلي لسطح المكتب والموبايل مع خزنة SQLCipher/Argon2، محرك الفريق الكامل، سجل تسليم Agent2Agent محلي، فرق البشر والوكلاء وهويات الأجهزة، مهارات `SKILL.md`، ترحيل مشفّر، وأهداف متكررة معطلة افتراضيًا.
 - كتالوج 22 مزود AI وواجهة BYOK أصلية؛ 21 تعريفًا يستخدم عائلات بروتوكول منفذة ويبقى غير مهيأ، بينما AWS Bedrock معلّم بوضوح كغير تشغيلي حتى إضافة AWS SigV4. التفعيل يتطلب الإذن وفحص صحة شبكيًا وخطة رجوع.
 
-> حالة التكاملات معروضة بصدق: GitHub متاح كمستودع محلي فقط، أما موفرو AI وNotion وAirtable وPostHog والنشر والأتمتة الخارجية فتبقى غير مفعلة حتى تضبط بيانات الاعتماد الآمنة وتجتاز بوابات القدرة.
+> حالة التكاملات معروضة بصدق: لا يوجد مزود AI متصل افتراضيًا. زر **ORION CTO · SETUP** يطلب مفتاح المستخدم ويثبت الاتصال باستجابة نموذج حقيقية؛ لا يمثل وجود اسم مزود في الكتالوج حسابًا مهيأ. GitHub متاح كمستودع محلي فقط، وتبقى Notion وAirtable وPostHog والنشر وبقية الأتمتة الخارجية غير مفعلة.
+
+## تشغيل Orion CTO من الواجهة
+
+1. افتح رابط PWA واضغط **ORION CTO · SETUP** أو **Connect Orion CTO**.
+2. اختر المزود؛ ستملأ الواجهة endpoint واسم model الافتراضيين. Azure يتطلب نطاق مورد `*.openai.azure.com`، والمزود المحلي يتطلب loopback على الجهاز الذي يشغّل خادم Atlantis-X.
+3. أدخل API key، وافق على الوصول المحدود للنموذج، وأكد أن **Disconnect** هو خطة الرجوع.
+4. اضغط **Verify provider & activate CTO**. لا تعرض الواجهة حالة LIVE إلا بعد نجاح طلب inference فعلي يعيد challenge المتوقع.
+5. أعطِ Orion هدفك من اللوحة. يعرض التطبيق الإجابة، المخاطر، الافتراضات، التفويضات، ومعيار قبول كل خطوة؛ ويحفظ الخطة المنقحة فقط في workflow المحلي.
+
+الاتصال يمنح Orion **استدلالًا وتخطيطًا فقط**. لا يحصل النموذج على أدوات filesystem أو browser أو desktop أو دفع أو نشر أو deployment. الخطة لا تعني تنفيذ أثر خارجي، وتظل العمليات السيادية وعالية الخطورة عند بوابة موافقة القائد.
 
 ## التثبيت للمستخدم — دون Docker أو Terminal
 
@@ -71,7 +84,7 @@ docker compose up --build
 ```bash
 python -m unittest discover -s tests -v
 node --check web/app.js
-python -m py_compile server.py
+python -m py_compile server.py cto_agent.py
 python -m json.tool config/workforce.json >/dev/null
 python -m json.tool config/capabilities.json >/dev/null
 python -m json.tool config/providers.json >/dev/null
@@ -83,8 +96,8 @@ python -m json.tool src-tauri/tauri.conf.json >/dev/null
 ```text
 web/
   index.html                 واجهة مركز القيادة وتجربة التثبيت
-  styles.css                 نظام التصميم المتجاوب
-  app.js                     التفاعل والمصادقة وتثبيت PWA وجسر الخزنة الأصلية
+  styles.css + cto.css       نظام التصميم المتجاوب وسطح Orion CTO
+  app.js                     التفاعل والمصادقة وBYOK وتثبيت PWA وجسر الخزنة الأصلية
   manifest.webmanifest       تعريف التطبيق عبر المنصات
   service-worker.js          App Shell؛ يستثني Control API
   assets/icons/              أيقونات Windows وApple وPWA
@@ -97,11 +110,13 @@ src-tauri/
   src/runtime.rs             سير العمل وA2A والمزودون والمهارات والترحيل والفرق والجداول
   tauri.conf.json            حزم Windows/macOS/Linux/Android/iOS
 server.py                    الخادم والمحرك وSQLite وPolicy Gate
+cto_agent.py                 بوابة Orion CTO المقيدة وموصلات inference للجلسة
 docs/
   AI_WORKFORCE_ARCHITECTURE.md
   NATIVE_APP.md
 tests/
-  test_command_center.py
+  test_command_center.py     اختبارات المحرك المحلي
+  test_cto_agent.py          موصلات CTO ودورة المفتاح والمخاطر ومسارات HTTP
 ```
 
 ## Runtime API
@@ -109,6 +124,9 @@ tests/
 ```text
 GET  /api/health
 GET  /api/state
+POST /api/cto/connect           {"provider_id": "...", "endpoint": "...", "model": "...", "secret": "...", "permission_granted": true, "rollback_ready": true}
+POST /api/cto/run               {"command": "..."}
+POST /api/cto/disconnect        {}
 POST /api/commands              {"command": "...", "autorun": true}
 POST /api/tasks/{id}/run        {"mode": "next|until_gate"}
 POST /api/tasks/{id}/decision   {"decision": "approve|reject", "note": "..."}
@@ -125,8 +143,9 @@ Authorization: Bearer <ATLANTISX_COMMANDER_KEY>
 
 - يحفظ خادم الويب runtime في `.atlantisx/atlantisx.db` باستخدام SQLite وWAL؛ الملف مستبعد من Git لكنه **غير مشفر**، لذلك لا يخزن أسرارًا.
 - خزنة التطبيق الأصلي في `src-tauri` تستخدم SQLCipher لتشفير قاعدة البيانات كاملة وArgon2 لاشتقاق المفتاح. لم تُبنَ الحزم الأصلية في هذه البيئة لغياب Rust وSDKs والتوقيع.
-- لا تحفظ مفاتيح API أو بيانات الاعتماد داخل الواجهة أو المستودع أو قاعدة Runtime غير المشفرة.
+- لا تحفظ مفاتيح API داخل المستودع أو قاعدة Runtime غير المشفرة. جلسة CTO في الويب تحتفظ بمفتاح واحد في ذاكرة عملية Python فقط حتى disconnect أو restart؛ أما التخزين الدائم الآمن فهو للخزنة الأصلية SQLCipher بعد بناء Tauri.
+- endpoint المزود المستضاف مقيد بنطاق المزود المختار وHTTPS/443؛ وendpoint المحلي مقيد بـHTTP loopback. لا تُتبع redirects وتُحد الاستجابة بـ1 MiB.
 - `config/capabilities.json` يبقي كل قدرة خارجية معطلة حتى تمر الموافقة وفحص الصحة وخطة الرجوع.
-- التنفيذ الحالي محلي وحتمي؛ لا يدّعي وجود LLM أو ماسح ثغرات أو موصل SaaS غير مهيأ.
-- `RELEASE` يسجل إصدارًا محليًا فقط، مع `external_effects_enabled: false`.
+- عند اتصال مزود حقيقي يصبح تحليل CTO مولّدًا بالنموذج؛ دون اتصال يبقى المسار حتميًا ويظهر ذلك في الواجهة. لا يوجد ماسح ثغرات أو موصل SaaS أو منفذ أدوات غير مهيأ.
+- حتى مع النموذج، يسجل `RELEASE` إصدارًا محليًا فقط، مع `external_effects_enabled: false`. استدلال المزود لا يمنحه أداة لتنفيذ الخطة.
 - قبل نشر عام، استخدم TLS وReverse Proxy موثوقًا وRate Limiting وهوية مركزية، ويفضل OIDC بدل المفتاح المشترك.

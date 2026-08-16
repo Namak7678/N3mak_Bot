@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from cto_agent import CtoAgent, CtoAgentError
+
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config" / "workforce.json"
@@ -90,6 +92,7 @@ class WorkforceEngine:
         config_path: Path = CONFIG_PATH,
         runtime_path: Path = RUNTIME_PATH,
         capabilities_path: Path = CAPABILITIES_PATH,
+        cto_agent: Optional[CtoAgent] = None,
     ) -> None:
         self.config_path = Path(config_path)
         self.capabilities_path = Path(capabilities_path)
@@ -103,6 +106,7 @@ class WorkforceEngine:
         self._base = self._read_json(self.config_path)
         self._capabilities = self._read_json(self.capabilities_path)
         self._providers = self._read_json(PROVIDERS_PATH)
+        self._cto = cto_agent or CtoAgent(self._providers)
 
     @staticmethod
     def _read_json(path: Path) -> Dict[str, Any]:
@@ -256,6 +260,7 @@ class WorkforceEngine:
             state["teams"] = []
             state["schedules"] = []
             state["imports"] = []
+            state["cto"] = self._cto.status()
             runtime = self._load_runtime()
 
             for task in state.get("tasks", []):
@@ -278,7 +283,10 @@ class WorkforceEngine:
             for agent in state.get("agents", []):
                 assigned = [
                     task for task in state["tasks"]
-                    if task.get("owner") == agent["id"] and task.get("status") != "completed"
+                    if (
+                        task.get("owner") == agent["id"]
+                        or agent["id"] in task.get("delegated_agents", [])
+                    ) and task.get("status") != "completed"
                 ]
                 queue = agent.setdefault("queue", {})
                 queue["depth"] = len(assigned)
@@ -328,7 +336,7 @@ class WorkforceEngine:
                 "generated_at": self._now_iso(),
                 "connected": True,
                 "engine": "online",
-                "version": "2.2-local",
+                "version": "2.3-local",
                 "execution_mode": "auditable_local_sandbox",
                 "storage": {
                     "backend": "sqlite",
@@ -747,6 +755,103 @@ class WorkforceEngine:
             result["message"] = "أكمل الفريق الدورة المحلية الآمنة وسجّل جميع مراحلها."
         return result
 
+    def connect_cto(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Activate one session-only model after all three inference gates pass."""
+        return self._cto.connect(
+            provider_id=payload.get("provider_id", ""),
+            endpoint=payload.get("endpoint", ""),
+            model=payload.get("model", ""),
+            secret=payload.get("secret", ""),
+            permission_granted=payload.get("permission_granted") is True,
+            rollback_ready=payload.get("rollback_ready") is True,
+        )
+
+    def disconnect_cto(self) -> Dict[str, Any]:
+        """Forget the web CTO credential and return to offline orchestration."""
+        return self._cto.disconnect()
+
+    def run_cto_goal(self, command: str) -> Dict[str, Any]:
+        """Ask the live model to plan a goal, then stage that plan without fake side effects."""
+        context_state = self.get_state()
+        context = {
+            "project": context_state.get("project", {}).get("name", "Atlantis-X"),
+            "open_tasks": sum(
+                task.get("status") != "completed" for task in context_state.get("tasks", [])
+            ),
+            "waiting_for_commander": context_state.get("runtime", {}).get("waiting_approval", 0),
+            "external_automation_enabled": False,
+            "available_internal_roles": [agent.get("id") for agent in context_state.get("agents", [])],
+        }
+        cto_plan = self._cto.run_goal(command, context)
+        result = self.create_command(command)
+
+        with self._lock:
+            runtime = self._load_runtime()
+            task, _ = self._find_task(runtime, result["task"]["id"])
+            needs_approval = bool(
+                result["requires_approval"]
+                or result["task"].get("priority") == "critical"
+                or cto_plan["requires_approval"]
+                or cto_plan["risk_level"] in {"high", "critical"}
+            )
+            delegated_agents = list(dict.fromkeys(
+                delegation["owner"] for delegation in cto_plan["delegations"]
+            ))
+            lead_executor = next(
+                (agent_id for agent_id in delegated_agents if agent_id != "orion"),
+                "orion",
+            )
+            task.update({
+                "source": "ORION AI CTO",
+                "owner": "orion",
+                "executor": lead_executor,
+                "delegated_agents": delegated_agents,
+                "requires_approval": needs_approval,
+                "cto_plan": cto_plan,
+                "status": "in_progress",
+                "progress": self.STAGE_PROGRESS["plan"],
+            })
+            workflow = self._new_workflow(task, fresh=True)
+            workflow["policy"]["execution_scope"] = "ai_planning_only"
+            plan_stage = workflow["stages"][0]
+            plan_stage.update({
+                "owner": "orion",
+                "status": "done",
+                "result": "ORION produced a provider-backed CTO plan; no external action was executed.",
+                "completed_at": self._now_iso(),
+            })
+            workflow["cursor"] = 1
+            workflow["state"] = "ready"
+            workflow["stages"][1]["status"] = "ready"
+            self._record_workflow_event(
+                runtime,
+                workflow,
+                task,
+                plan_stage,
+                "ORION generated a model-backed CTO plan inside the no-side-effect boundary.",
+                "planned",
+            )
+            runtime["workflows"][task["id"]] = workflow
+            self._save_runtime(runtime)
+
+        result.update({
+            "accepted": not needs_approval,
+            "requires_approval": needs_approval,
+            "task": task,
+            "owner_name": self._agent_name("orion"),
+            "executor_name": self._agent_name(lead_executor),
+            "workflow": workflow,
+            "cto_plan": cto_plan,
+            "plan": [item["action"] for item in cto_plan["delegations"]],
+            "executed": ["provider_inference", "plan_staged"],
+            "message": (
+                "ORION prepared the CTO plan. Commander approval is required before its sovereign steps."
+                if needs_approval
+                else "ORION prepared and staged the CTO plan. No external action was executed."
+            ),
+        })
+        return result
+
     @staticmethod
     def _build_plan(task: Dict[str, Any], owner_name: str, needs_approval: bool) -> List[str]:
         if needs_approval:
@@ -857,7 +962,7 @@ class WorkforceEngine:
 class CommandCenterHandler(SimpleHTTPRequestHandler):
     """Serve the dashboard and the local workforce API."""
 
-    server_version = "AtlantisX/2.2"
+    server_version = "AtlantisX/2.3"
     extensions_map = {
         **SimpleHTTPRequestHandler.extensions_map,
         ".webmanifest": "application/manifest+json",
@@ -915,7 +1020,7 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
             self._send_json({
                 "status": "ok",
                 "service": "atlantis-x-command-center",
-                "version": "2.2",
+                "version": "2.3",
                 "commander_auth_required": bool(self.commander_key),
             })
             return
@@ -939,6 +1044,21 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
             return
         try:
             payload = self._read_payload()
+            if path == "/api/cto/connect":
+                status = self.engine.connect_cto(payload)
+                self._send_json({"cto": status})
+                return
+
+            if path == "/api/cto/disconnect":
+                status = self.engine.disconnect_cto()
+                self._send_json({"cto": status})
+                return
+
+            if path == "/api/cto/run":
+                result = self.engine.run_cto_goal(payload.get("command", ""))
+                self._send_json(result, HTTPStatus.CREATED)
+                return
+
             if path == "/api/commands":
                 autorun = payload.get("autorun", True)
                 if not isinstance(autorun, bool):
@@ -970,6 +1090,8 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
                 return
 
             self._send_json({"error": "المسار غير موجود"}, HTTPStatus.NOT_FOUND)
+        except CtoAgentError as exc:
+            self._send_json({"error": str(exc), "code": "CTO_PROVIDER_ERROR"}, HTTPStatus.BAD_GATEWAY)
         except ValueError as exc:
             self._send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except KeyError as exc:
@@ -982,6 +1104,8 @@ class CommandCenterHandler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError as exc:
             raise ValueError("Content-Length غير صالح") from exc
+        if length < 0:
+            raise ValueError("Content-Length غير صالح")
         if length > 16_384:
             raise ValueError("حجم الطلب أكبر من الحد المسموح")
         body = self.rfile.read(length)
@@ -1017,8 +1141,9 @@ def make_server(
     host: str = "0.0.0.0",
     port: int = 4173,
     commander_key: Optional[str] = None,
+    engine: Optional[WorkforceEngine] = None,
 ) -> ReusableThreadingHTTPServer:
-    engine = WorkforceEngine()
+    engine = engine or WorkforceEngine()
     key = os.environ.get("ATLANTISX_COMMANDER_KEY", "") if commander_key is None else commander_key
     if key and len(key) < 16:
         raise ValueError("ATLANTISX_COMMANDER_KEY must contain at least 16 characters")

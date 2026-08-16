@@ -14,6 +14,7 @@ const AX = {
   selectedProvider: null,
   selectedTeam: null,
   pendingMigration: null,
+  ctoProvidersRendered: false,
   colors: {
     orion: { hex: "#42e8ca", rgb: "66,232,202" },
     athena: { hex: "#68c9f0", rgb: "104,201,240" },
@@ -254,6 +255,7 @@ async function loadState() {
 
 function renderAll() {
   renderHeader();
+  renderCtoStatus();
   renderMetrics();
   renderWorkstreams();
   renderDecisions();
@@ -287,9 +289,16 @@ function renderHeader() {
   authorityControl.title = authority.verified ? "جلسة القائد محمية بمفتاح" : "تشغيل محلي دون تحقق هوية";
 
   const decisionCount = AX.state.decisions.length;
-  $("#hero-status-copy").textContent = decisionCount
-    ? `كل الوحدات متصلة. هناك ${decisionCount} من القرارات السيادية بانتظار سلطتك.`
-    : "كل الوحدات متصلة. لا توجد قرارات سيادية معلّقة الآن.";
+  const cto = AX.state.cto || {};
+  if (!AX.nativeRuntime && cto.connected) {
+    $("#hero-status-copy").textContent = decisionCount
+      ? `Orion CTO متصل بـ ${cto.provider_name} · هناك ${decisionCount} قرار سيادي بانتظار سلطتك.`
+      : `Orion CTO متصل بـ ${cto.provider_name} ويقود الفريق. أعطني الهدف وسأعود بإجابة وخطة قابلة للتدقيق.`;
+  } else {
+    $("#hero-status-copy").textContent = decisionCount
+      ? `Orion يعمل بالتنسيق المحلي الحتمي. هناك ${decisionCount} قرار سيادي بانتظار سلطتك.`
+      : "Orion يعمل الآن بالتنسيق المحلي الحتمي؛ اربط نموذج AI للحصول على تحليل CTO مولّد فعليًا.";
+  }
 
   const now = new Date();
   const date = new Intl.DateTimeFormat("ar-EG", { weekday: "long", day: "numeric", month: "long" }).format(now);
@@ -297,6 +306,142 @@ function renderHeader() {
   $("#brief-date").textContent = new Intl.DateTimeFormat("ar-EG", {
     dateStyle: "full", timeStyle: "short"
   }).format(now);
+}
+
+function ctoProviderDefinitions() {
+  const supported = new Set(["openai_compatible", "azure_openai", "anthropic", "gemini", "cohere", "ollama"]);
+  return (AX.state?.provider_registry?.providers || []).filter(provider =>
+    provider.operational !== false && supported.has(provider.adapter)
+  );
+}
+
+function populateCtoProviders() {
+  const select = $("#cto-provider");
+  const providers = ctoProviderDefinitions();
+  const previous = select.value;
+  select.innerHTML = providers.map(provider =>
+    `<option value="${escapeHTML(provider.id)}">${escapeHTML(provider.name)}${provider.local ? " · LOCAL SERVER" : ""}</option>`
+  ).join("");
+  if (providers.some(provider => provider.id === previous)) select.value = previous;
+  AX.ctoProvidersRendered = true;
+  applyCtoProviderDefaults(false);
+}
+
+function applyCtoProviderDefaults(force = true) {
+  const provider = ctoProviderDefinitions().find(item => item.id === $("#cto-provider").value);
+  if (!provider) return;
+  const endpoint = $("#cto-endpoint");
+  const model = $("#cto-model");
+  if (force || !endpoint.value) endpoint.value = provider.base_url || "";
+  if (force || !model.value) model.value = provider.default_model || "";
+  endpoint.placeholder = provider.adapter === "azure_openai"
+    ? "https://YOUR-RESOURCE.openai.azure.com"
+    : provider.local ? "HTTP loopback endpoint on the server running Atlantis-X" : "HTTPS provider endpoint";
+  const secret = $("#cto-secret");
+  secret.required = !["none", "optional-bearer"].includes(provider.auth);
+  secret.placeholder = secret.required
+    ? "Session only — never written to SQLite"
+    : "Optional for this local provider";
+}
+
+function renderCtoStatus() {
+  const status = AX.state?.cto || { connected: false, mode: "deterministic_only" };
+  const connected = !AX.nativeRuntime && Boolean(status.connected);
+  const statusButton = $("#cto-status-button");
+  const strip = $("#cto-connection-strip");
+  const portrait = $(".cto-agent-photo");
+  statusButton.classList.toggle("connected", connected);
+  strip.classList.toggle("connected", connected);
+  portrait.classList.toggle("connected", connected);
+  $("#cto-status-label").textContent = connected ? "ORION CTO · LIVE AI" : "ORION CTO · SETUP";
+  $("#cto-live-badge").textContent = connected
+    ? `LIVE AI · ${status.provider_name} / ${status.model}`
+    : AX.nativeRuntime ? "NATIVE CORE · DETERMINISTIC" : "MODEL SETUP REQUIRED · OFFLINE MODE";
+  $("#cto-connection-title").textContent = connected
+    ? `${status.provider_name} · ${status.model}`
+    : AX.nativeRuntime ? "Native CTO inference is not wired in this build" : "AI model not connected";
+  $("#cto-connection-copy").textContent = connected
+    ? "Verified live inference · credential held in process memory only"
+    : AX.nativeRuntime
+      ? "Provider management is available, but commands remain deterministic."
+      : "Goals remain deterministic until you activate session-only BYOK.";
+  $("#cto-connect-button span").textContent = connected ? "Manage connection" : "Connect Orion CTO";
+  $("#command-form .send-command span").textContent = connected ? "Ask Orion CTO" : "ابدأ عمل CTO";
+  statusButton.title = connected
+    ? `Live provider: ${status.provider_name} / ${status.model}`
+    : "Connect and health-check a real model provider";
+
+  if (!AX.ctoProvidersRendered && !AX.nativeRuntime) populateCtoProviders();
+  const connectedCard = $("#cto-connected-card");
+  const form = $("#cto-form");
+  connectedCard.hidden = !connected;
+  form.hidden = connected;
+  if (connected) {
+    $("#cto-connected-name").textContent = `${status.agent || "ORION"} · ${status.provider_name}`;
+    $("#cto-connected-model").textContent = `${status.model} · HEALTH VERIFIED · PROCESS MEMORY ONLY`;
+  }
+}
+
+function openCtoDialog() {
+  if (AX.nativeRuntime) {
+    setView("providers");
+    toast("هذه الحزمة الأصلية تعرض إدارة BYOK المشفّرة، لكن Orion model inference غير موصول بها بعد.");
+    return;
+  }
+  if (!AX.ctoProvidersRendered) populateCtoProviders();
+  $("#cto-message").textContent = "";
+  renderCtoStatus();
+  const dialog = $("#cto-dialog");
+  if (!dialog.open) dialog.showModal();
+  if (!AX.state?.cto?.connected) setTimeout(() => $("#cto-provider").focus(), 80);
+}
+
+async function connectCto() {
+  const submit = $("#cto-connect-submit");
+  const secretInput = $("#cto-secret");
+  submit.disabled = true;
+  submit.textContent = "Calling provider for live health verification…";
+  $("#cto-message").textContent = "";
+  try {
+    await api("/api/cto/connect", {
+      method: "POST",
+      body: JSON.stringify({
+        provider_id: $("#cto-provider").value,
+        endpoint: $("#cto-endpoint").value.trim(),
+        model: $("#cto-model").value.trim(),
+        secret: secretInput.value,
+        permission_granted: $("#cto-permission").checked,
+        rollback_ready: $("#cto-rollback").checked
+      })
+    });
+    secretInput.value = "";
+    await loadState();
+    toast("Orion CTO is live. Provider inference passed the health gate.");
+  } catch (error) {
+    $("#cto-message").textContent = error.message;
+  } finally {
+    secretInput.value = "";
+    submit.disabled = false;
+    submit.textContent = "Verify provider & activate CTO";
+  }
+}
+
+async function disconnectCto() {
+  const button = $("#cto-disconnect");
+  button.disabled = true;
+  $("#cto-message").textContent = "";
+  try {
+    await api("/api/cto/disconnect", { method: "POST", body: "{}" });
+    $("#cto-secret").value = "";
+    $("#cto-permission").checked = false;
+    $("#cto-rollback").checked = false;
+    await loadState();
+    toast("Provider disconnected. The session credential was forgotten.");
+  } catch (error) {
+    $("#cto-message").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderMetrics() {
@@ -981,34 +1126,65 @@ async function submitCommand(command) {
     return;
   }
   const submit = $("#command-form .send-command");
+  const liveCto = !AX.nativeRuntime && Boolean(AX.state?.cto?.connected);
   submit.disabled = true;
-  submit.querySelector("span").textContent = "Orion يحلّل…";
+  submit.querySelector("span").textContent = liveCto ? "Orion CTO is thinking…" : "Orion يحلّل محليًا…";
   try {
     if (AX.nativeRuntime && !AX.vaultStatus?.unlocked) {
       openNativeVault();
       throw new Error("افتح الخزنة المشفّرة أولًا لتشغيل الهدف.");
     }
-    const result = await api("/api/commands", { method: "POST", body: JSON.stringify({ command }) });
+    const path = liveCto ? "/api/cto/run" : "/api/commands";
+    const result = await api(path, { method: "POST", body: JSON.stringify({ command }) });
     await loadState();
     showCommandResult(result);
     $("#command-input").value = "";
     autoGrow($("#command-input"));
   } catch (error) {
+    if (error.code === "CTO_PROVIDER_ERROR") openCtoDialog();
     toast(error.message, "error");
   } finally {
     submit.disabled = false;
-    submit.querySelector("span").textContent = "إرسال التوجيه";
+    submit.querySelector("span").textContent = liveCto ? "Ask Orion CTO" : "ابدأ عمل CTO";
   }
 }
 
 function showCommandResult(result) {
+  if (result.cto_plan) {
+    showCtoCommandResult(result);
+    return;
+  }
   const approval = result.requires_approval;
   $("#command-result").innerHTML = `
     <div class="dialog-result-icon ${approval ? "approval" : ""}">${icon(approval ? "lock" : "check")}</div>
-    <div class="command-result-head"><span class="section-kicker ${approval ? "amber" : ""}">${approval ? "SOVEREIGN APPROVAL GATE" : "LOCAL CYCLE COMPLETE"}</span><h2>${approval ? "توقفت الدورة عند بوابة سلطتك" : "أكمل الفريق التوجيه محليًا"}</h2><p>${escapeHTML(result.message)}</p></div>
+    <div class="command-result-head"><span class="section-kicker ${approval ? "amber" : ""}">${approval ? "SOVEREIGN APPROVAL GATE" : "DETERMINISTIC LOCAL MODE"}</span><h2>${approval ? "توقفت الدورة عند بوابة سلطتك" : "نسّق Orion التوجيه محليًا"}</h2><p>${escapeHTML(result.message)}</p></div>
     <div class="command-ticket"><span>${escapeHTML(result.task.title)}</span><b>${escapeHTML(result.task.id)} · ORION → ${escapeHTML(result.executor_name)}</b></div>
     <div class="command-plan">${result.plan.map((step, index) => `<div><i>0${index + 1}</i><span>${escapeHTML(step)}</span></div>`).join("")}</div>
-    <button class="dialog-action" data-go-view="runtime" data-close-dialog>${approval ? "فتح بوابة القرار" : "عرض سجل الدورة المكتملة"}</button>`;
+    <button class="dialog-action" data-go-view="runtime" data-close-dialog>${approval ? "فتح بوابة القرار" : "عرض سجل الدورة المحلية"}</button>`;
+  $("#command-dialog").showModal();
+}
+
+function showCtoCommandResult(result) {
+  const plan = result.cto_plan;
+  const approval = Boolean(result.requires_approval);
+  const delegations = (plan.delegations || []).map((item, index) => {
+    const owner = agentById(item.owner);
+    return `<div class="cto-plan-item"><i>${escapeHTML(item.owner || `0${index + 1}`)}</i><strong>${escapeHTML(item.action)}</strong><small>${escapeHTML(owner?.name || item.owner)} · ACCEPTANCE: ${escapeHTML(item.acceptance)}</small></div>`;
+  }).join("");
+  const assumptions = (plan.assumptions || []).length
+    ? `<div class="command-plan">${plan.assumptions.map((item, index) => `<div><i>A${index + 1}</i><span>${escapeHTML(item)}</span></div>`).join("")}</div>`
+    : "";
+  $("#command-result").innerHTML = `<div class="cto-result">
+    <div class="dialog-result-icon ${approval ? "approval" : ""}">${icon(approval ? "lock" : "spark")}</div>
+    <div class="command-result-head"><span class="section-kicker ${approval ? "amber" : ""}">ORION CTO · ${escapeHTML(plan.provider.name)} / ${escapeHTML(plan.provider.model)}</span><h2>${escapeHTML(plan.executive_summary)}</h2><p>${escapeHTML(result.message)}</p></div>
+    <div class="command-ticket"><span>${escapeHTML(result.task.title)}</span><b>${escapeHTML(result.task.id)} · RISK ${escapeHTML(plan.risk_level).toUpperCase()}${approval ? " · COMMANDER APPROVAL" : " · PLAN STAGED"}</b></div>
+    <div class="cto-answer">${escapeHTML(plan.answer)}</div>
+    ${delegations ? `<div><span class="section-kicker">INTERNAL DELEGATION PLAN</span><div class="cto-plan-list">${delegations}</div></div>` : ""}
+    ${assumptions}
+    <div class="cto-next-action"><b>NEXT ACTION · </b>${escapeHTML(plan.next_action)}</div>
+    <div class="cto-result-boundary">${icon("shield")}<span>${escapeHTML(plan.execution_boundary)}</span></div>
+    <button class="dialog-action" data-go-view="runtime" data-close-dialog>${approval ? "Review Commander approval gate" : "Open auditable staged workflow"}</button>
+  </div>`;
   $("#command-dialog").showModal();
 }
 
@@ -1223,6 +1399,11 @@ function bindEvents() {
   });
 
   $("#command-form").addEventListener("submit", event => { event.preventDefault(); submitCommand($("#command-input").value); });
+  $("#cto-form").addEventListener("submit", event => { event.preventDefault(); connectCto(); });
+  $("#cto-provider").addEventListener("change", () => applyCtoProviderDefaults(true));
+  $("#cto-status-button").addEventListener("click", openCtoDialog);
+  $("#cto-connect-button").addEventListener("click", openCtoDialog);
+  $("#cto-disconnect").addEventListener("click", disconnectCto);
   $("#provider-form").addEventListener("submit", event => { event.preventDefault(); configureSelectedProvider(event.currentTarget); });
   $("#skill-form").addEventListener("submit", event => { event.preventDefault(); installSkillFromForm(); });
   $("#skill-file").addEventListener("change", async event => {
@@ -1310,6 +1491,10 @@ function bindEvents() {
     });
     dialog.addEventListener("close", () => {
       if (dialog.id === "provider-dialog") $("#provider-secret").value = "";
+      if (dialog.id === "cto-dialog") {
+        $("#cto-secret").value = "";
+        $("#cto-message").textContent = "";
+      }
       if (dialog.id === "member-dialog") $("#member-message").textContent = "";
     });
   });

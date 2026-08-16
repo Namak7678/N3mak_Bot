@@ -1,4 +1,4 @@
-# Atlantis-X AI Workforce v2.2
+# Atlantis-X AI Workforce v2.3
 
 ## Operating model
 
@@ -8,10 +8,10 @@ Atlantis-X uses **autonomy by default with human authority at the top**. The CEO
 CEO / Commander
       │
       ▼
-Orion — AI Chief of Staff / Orchestrator
+Orion — Personal AI CTO / Chief Orchestrator
       ├── Athena — Executive Secretary
       ├── Atlas — Project Manager
-      │     └── Forge — AI CTO / Developer
+      │     └── Forge — Engineering Lead / Developer
       ├── Sentinel — Security Director
       ├── Pulse — Performance Director
       ├── Nexus — Intelligence Director
@@ -21,9 +21,20 @@ Orion — AI Chief of Staff / Orchestrator
       └── Nova — Marketing & PR
 ```
 
+## Single-agent CTO interface
+
+The Commander interacts with **Orion as the only accountable AI CTO**. Forge is an internal engineering lead, not a second CTO. Orion may assign bounded work to Atlas, Forge, Sentinel and the rest of the workforce, but specialists do not become disconnected user-facing assistants.
+
+In the web PWA, Orion has two explicit modes:
+
+- `setup_required`: deterministic local classification and orchestration only;
+- `live_model_planning`: provider-backed analysis after graphical BYOK setup passes permission, inference health and disconnect/forget rollback gates.
+
+Provider credentials are never part of shared truth. One web credential is retained in Python process memory only and is omitted from state, task plans, SQLite and audit records. The model receives bounded counts/role IDs rather than the database. Provider inference can produce an answer and delegation plan, but exposes no filesystem, browser, payment, publication or deployment tool. The deterministic classifier and model risk signal independently escalate approval; neither can bypass Commander authority.
+
 ## Shared truth
 
-`config/workforce.json` is the v2.2 workforce registry and the source of truth for every employee's identity, mission, skills, scoped memory contract, tools, permissions, KPIs, queue policy, communication channels, reporting line and escalation path. The local API combines that registry with runtime directives and derives each employee's live queue items, active count and Commander-waiting count.
+`config/workforce.json` is the v2.3 workforce registry and the source of truth for every employee's identity, mission, skills, scoped memory contract, tools, permissions, KPIs, queue policy, communication channels, reporting line and escalation path. The local API combines that registry with runtime directives and derives each employee's live queue items, active count and Commander-waiting count.
 
 The intended production knowledge core is:
 
@@ -34,7 +45,7 @@ The intended production knowledge core is:
 
 The Command Center never labels an external integration as connected unless its credentials and health check are confirmed. In v2, GitHub is reported as locally available; Notion, Airtable and PostHog remain pending.
 
-## Agent Runtime v2.2
+## Agent Runtime v2.3
 
 Every task owns a persisted workflow with seven explicit stages:
 
@@ -66,7 +77,7 @@ CEO directive
   → Athena closes and reports the cycle
 ```
 
-The v2.2 routing and workflow engine is deterministic and auditable. It does not pretend that an LLM, GitHub write adapter, vulnerability scanner, external SaaS or deployment target is connected.
+The underlying routing and workflow engine remains deterministic and auditable. The optional Orion CTO gateway is labeled live only after a real model call succeeds; when connected, model inference adds analysis and a staged plan but does not turn the workflow stages into tool execution. The system never pretends that a GitHub write adapter, vulnerability scanner, external SaaS or deployment target is connected.
 
 When `ATLANTISX_COMMANDER_KEY` is configured, it must be at least 16 characters and all control-plane routes require a constant-time checked Bearer key. The web client stores that key only in browser `sessionStorage`, can lock the session, and presents a non-dismissible authority gate after a `401`. Without the variable, the server remains available in explicitly labeled local single-user mode. This shared-key guard is not a replacement for TLS, OIDC or production multi-user authorization.
 
@@ -98,8 +109,11 @@ Agent prompts, tools or policies are never silently self-modified in production.
 ## Local API
 
 - `GET /api/health` — public liveness and authentication-mode health.
-- `GET /api/state` — shared Command Center, workflow, authority and audit state.
-- `POST /api/commands` — route a CEO directive and, by default, autonomously run it to completion or approval.
+- `GET /api/state` — shared Command Center, workflow, authority, sanitized CTO status and audit state.
+- `POST /api/cto/connect` — validate a provider endpoint and activate the session only after a live inference challenge.
+- `POST /api/cto/run` — request a structured CTO answer/plan and stage it in the normal auditable workflow.
+- `POST /api/cto/disconnect` — forget the in-process web credential and return to deterministic mode.
+- `POST /api/commands` — route a deterministic CEO directive and, by default, autonomously run it to completion or approval.
 - `POST /api/tasks/{id}/run` — execute one stage or continue until completion/approval gate.
 - `POST /api/tasks/{id}/decision` — record a CEO approval/rejection and optional audit note.
 - `POST /api/tasks/{id}/status` — manually update and reconcile task/workflow state.

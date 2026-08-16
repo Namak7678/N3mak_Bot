@@ -15,6 +15,7 @@
   <link rel="icon" href="/assets/icons/icon-64.png" type="image/png">
   <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/cto.css">
 </head>
 <body>
   <svg class="svg-sprite" aria-hidden="true">
@@ -96,6 +97,7 @@
       </div>
       <div class="topbar-actions">
         <div class="system-live"><i></i><span>النظام تشغيلي</span><small>OPERATIONAL</small></div>
+        <button class="cto-status-button" id="cto-status-button" type="button"><svg><use href="#i-spark"/></svg><span id="cto-status-label">ORION CTO · SETUP</span><i></i></button>
         <button class="install-app-button" id="install-app" type="button"><svg><use href="#i-device-download"/></svg><span>تثبيت التطبيق</span></button>
         <button class="vault-control" id="vault-control" type="button" hidden><svg><use href="#i-lock"/></svg><span id="vault-control-label">الخزنة مقفلة</span><i></i></button>
         <button class="authority-control" id="authority-control" type="button" aria-label="حالة جلسة القائد"><svg><use href="#i-lock"/></svg><span id="authority-label">LOCAL</span></button>
@@ -110,24 +112,29 @@
       <section class="view active" id="view-dashboard" data-view-section="dashboard">
         <div class="hero-grid">
           <article class="command-hero panel">
+            <div class="cto-agent-photo" aria-label="صورة تطبيق Orion CTO"><img src="/assets/icons/icon-192.png" alt="أيقونة تطبيق Atlantis-X"><b>AI CTO</b><i></i></div>
             <div class="hero-copy">
-              <div class="eyebrow"><i></i> قناة القيادة الآمنة <span>ORION ONLINE</span></div>
-              <h1>مساء الخير، <span>أيها القائد.</span></h1>
-              <p id="hero-status-copy">كل الوحدات متصلة. يتم تحميل قرارات السلطة الحالية…</p>
+              <div class="eyebrow"><i></i> قناة القيادة الآمنة <span id="cto-live-badge">ORION CTO · SETUP REQUIRED</span></div>
+              <h1>أنا <span>Orion، مديرك التقني.</span></h1>
+              <p id="hero-status-copy">اربط نموذج AI موثوقًا ليحوّل أهدافك إلى خطط تقنية قابلة للتدقيق.</p>
             </div>
             <form class="command-box" id="command-form">
               <div class="orion-avatar">O<span></span></div>
-              <label for="command-input">أصدر توجيهًا إلى Orion…</label>
-              <textarea id="command-input" rows="1" maxlength="500" placeholder="مثال: نفّذ خطة الأسبوع القادم"></textarea>
+              <label for="command-input">أعطِ Orion CTO هدفًا واضحًا…</label>
+              <textarea id="command-input" rows="1" maxlength="500" placeholder="مثال: صمّم وأولِ خطة إطلاق منتجي خلال 30 يومًا"></textarea>
               <div class="command-footer">
                 <div class="command-suggestions">
-                  <button type="button" data-command="نفّذ خطة الأسبوع القادم">خطة الأسبوع</button>
-                  <button type="button" data-command="جهّز تقرير سوق موريتانيا وفرص الاقتصاد الأزرق">تقرير موريتانيا</button>
-                  <button type="button" data-command="راجع حالة الأمن والثغرات في المشروع">فحص أمني</button>
+                  <button type="button" data-command="Build a 30-day technical launch plan for my product">30-day launch</button>
+                  <button type="button" data-command="Review my technology strategy and identify the top risks">CTO review</button>
+                  <button type="button" data-command="صمّم خارطة طريق تقنية آمنة للمنتج خلال 90 يومًا">خارطة 90 يومًا</button>
                 </div>
-                <button type="submit" class="send-command" aria-label="إرسال التوجيه"><span>إرسال التوجيه</span><svg><use href="#i-arrow"/></svg></button>
+                <button type="submit" class="send-command" aria-label="إرسال الهدف إلى Orion CTO"><span>ابدأ عمل CTO</span><svg><use href="#i-arrow"/></svg></button>
               </div>
             </form>
+            <div class="cto-connection-strip" id="cto-connection-strip">
+              <div><span class="cto-connection-dot"></span><p><strong id="cto-connection-title">AI model not connected</strong><small id="cto-connection-copy">Your key is never saved by the web preview.</small></p></div>
+              <button type="button" id="cto-connect-button"><svg><use href="#i-plug"/></svg><span>Connect Orion CTO</span></button>
+            </div>
           </article>
 
           <article class="health-card panel">
@@ -191,7 +198,7 @@
 
       <section class="view" id="view-runtime" data-view-section="runtime">
         <div class="page-lead runtime-lead">
-          <div><span class="section-kicker">AGENT RUNTIME v2.2 · SQLITE CORE</span><h1>محرك الوكلاء</h1><p>دورة تنفيذ فعلية للحالة والصفوف وبوابات القرار، مع سجل تدقيق لكل انتقال ودون السماح بأثر خارجي غير موثّق.</p></div>
+          <div><span class="section-kicker">AGENT RUNTIME v2.3 · SQLITE CORE</span><h1>محرك الوكلاء</h1><p>دورة تنفيذ فعلية للحالة والصفوف وبوابات القرار، مع سجل تدقيق لكل انتقال ودون السماح بأثر خارجي غير موثّق.</p></div>
           <div class="runtime-online"><span class="runtime-orb"><i></i></span><div><strong>المحرك متصل</strong><small>AUDITABLE LOCAL EXECUTION</small></div></div>
         </div>
 
@@ -439,6 +446,36 @@
       <div><strong id="vault-goal-count">0 أهداف مشفّرة</strong><span>تبقى البيانات داخل مساحة التطبيق الأصلية.</span></div>
       <button type="button" id="vault-lock-button"><svg><use href="#i-lock"/></svg>قفل الخزنة الآن</button>
     </div>
+  </dialog>
+
+  <dialog class="app-dialog cto-dialog" id="cto-dialog">
+    <button class="dialog-close" data-close-dialog aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <div class="cto-dialog-head">
+      <img src="/assets/icons/icon-192.png" alt="أيقونة Atlantis-X Orion CTO">
+      <div><span class="section-kicker">ONE AGENT · CHIEF TECHNOLOGY OFFICER</span><h2>Activate Orion CTO</h2><p>Connect one model. Orion remains your single accountable agent and coordinates the internal team.</p></div>
+    </div>
+    <div class="cto-connected-card" id="cto-connected-card" hidden>
+      <div><i></i><p><strong id="cto-connected-name">Provider connected</strong><span id="cto-connected-model">Model</span></p></div>
+      <button type="button" id="cto-disconnect">Disconnect &amp; forget key</button>
+    </div>
+    <form id="cto-form">
+      <label for="cto-provider">AI provider</label>
+      <select id="cto-provider" required></select>
+      <div class="cto-field-grid">
+        <div><label for="cto-endpoint">Endpoint</label><input id="cto-endpoint" type="url" required maxlength="1024" autocomplete="off" spellcheck="false"></div>
+        <div><label for="cto-model">Model</label><input id="cto-model" required maxlength="300" autocomplete="off" spellcheck="false"></div>
+      </div>
+      <label for="cto-secret">API key <small>not required for local Ollama</small></label>
+      <input id="cto-secret" type="password" maxlength="8192" autocomplete="new-password" placeholder="Session only — never written to SQLite">
+      <div class="cto-gates">
+        <label><input id="cto-permission" type="checkbox" required><span><b>1 · Explicit permission</b><small>I permit Orion to call only this model provider.</small></span></label>
+        <label><input id="cto-rollback" type="checkbox" required><span><b>2 · Rollback ready</b><small>Disconnect immediately forgets the web-session credential.</small></span></label>
+        <div><i>3</i><span><b>Live health verification</b><small>A minimal model response must succeed before activation.</small></span></div>
+      </div>
+      <div class="cto-security-note"><svg><use href="#i-shield"/></svg><p><strong>Web preview boundary</strong><span>The credential stays only in server-process memory and disappears on restart. Use the compiled native SQLCipher vault for durable encrypted BYOK.</span></p></div>
+      <small class="form-message" id="cto-message" role="alert"></small>
+      <button class="dialog-action" id="cto-connect-submit" type="submit">Verify provider &amp; activate CTO</button>
+    </form>
   </dialog>
 
   <dialog class="app-dialog provider-dialog" id="provider-dialog">

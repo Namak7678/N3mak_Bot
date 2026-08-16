@@ -1,0 +1,11 @@
+.git
+.github
+.atlantisx
+__pycache__
+.pytest_cache
+.venv
+*.pyc
+*.zip
+tests
+docs
+README.md

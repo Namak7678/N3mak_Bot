@@ -1,0 +1,15 @@
+# Runtime state and local secrets
+.atlantisx/
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Editors / OS
+.vscode/
+.DS_Store

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070b11">
+  <meta name="description" content="Atlantis-X AI Workforce Command Center">
+  <title>Atlantis-X · AI Command Center</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-tasks" viewBox="0 0 24 24"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+    <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="m12 12 6-6M12 3v2M21 12h-2M12 21v-2M3 12h2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v4a6 6 0 0 1-12 0V8Z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-command" viewBox="0 0 24 24"><path d="M18 9a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3Z"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3-1.6 4.4L6 9l4.4 1.6L12 15l1.6-4.4L18 9l-4.4-1.6L12 3ZM5 16l-.8 2.2L2 19l2.2.8L5 22l.8-2.2L8 19l-2.2-.8L5 16ZM19 13l-.8 2.2L16 16l2.2.8L19 19l.8-2.2L22 16l-2.2-.8L19 13Z"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m18 6-12 12M6 6l12 12"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-git" viewBox="0 0 24 24"><circle cx="6" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="6" cy="20" r="2"/><path d="M6 6v12M8 6c2 0 2 2 4 2h4"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16M7 12h10M10 19h4"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  </svg>
+
+  <div class="app-loading" id="app-loading">
+    <div class="loading-mark"><i></i><i></i><i></i></div>
+    <strong>ATLANTIS-X</strong>
+    <span>تهيئة مركز القيادة…</span>
+  </div>
+
+  <aside class="sidebar" id="sidebar" aria-label="التنقل الرئيسي">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><span>AX</span></div>
+      <div><strong>ATLANTIS<span>—X</span></strong><small>AI COMMAND CENTER</small></div>
+    </div>
+
+    <div class="sidebar-section-label">مركز العمليات</div>
+    <nav class="main-nav">
+      <button class="nav-item active" data-view="dashboard"><svg><use href="#i-grid"/></svg><span>نظرة القيادة</span><b class="nav-pulse"></b></button>
+      <button class="nav-item" data-view="team"><svg><use href="#i-users"/></svg><span>فريق الذكاء</span><em id="agents-count">11</em></button>
+      <button class="nav-item" data-view="missions"><svg><use href="#i-tasks"/></svg><span>المهام</span><em id="tasks-count">31</em></button>
+      <button class="nav-item" data-view="runtime"><svg><use href="#i-command"/></svg><span>محرك الوكلاء</span><em class="runtime-nav-count" id="runtime-count">0</em></button>
+      <button class="nav-item" data-view="intelligence"><svg><use href="#i-radar"/></svg><span>الاستخبارات</span></button>
+      <button class="nav-item" data-view="security"><svg><use href="#i-shield"/></svg><span>الأمن والسياسات</span><em class="success-count">0</em></button>
+    </nav>
+
+    <div class="sidebar-section-label">البنية الأساسية</div>
+    <nav class="main-nav secondary-nav">
+      <button class="nav-item" data-view="integrations"><svg><use href="#i-plug"/></svg><span>التكاملات</span></button>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+    <div class="core-card">
+      <div class="core-visual"><span></span><span></span><span></span><b>87</b></div>
+      <div><strong>Knowledge Core</strong><small>موحّد ومتّصل داخليًا</small></div>
+      <i class="status-dot"></i>
+    </div>
+    <div class="commander-card">
+      <div class="commander-avatar">CEO</div>
+      <div><strong>القائد</strong><small>Ultimate Authority</small></div>
+      <button aria-label="المزيد"><svg><use href="#i-more"/></svg></button>
+    </div>
+  </aside>
+
+  <main class="main-shell">
+    <header class="topbar">
+      <div class="topbar-title">
+        <button class="mobile-menu" id="mobile-menu" aria-label="فتح القائمة"><svg><use href="#i-menu"/></svg></button>
+        <div><span>ATLANTIS-X</span><b>/</b><strong id="page-title">نظرة القيادة</strong></div>
+      </div>
+      <div class="topbar-actions">
+        <div class="system-live"><i></i><span>النظام تشغيلي</span><small>OPERATIONAL</small></div>
+        <button class="authority-control" id="authority-control" type="button" aria-label="حالة جلسة القائد"><svg><use href="#i-lock"/></svg><span id="authority-label">LOCAL</span></button>
+        <span class="top-date" id="current-date">الأحد، 16 أغسطس</span>
+        <button class="icon-button" id="global-search" aria-label="البحث"><svg><use href="#i-search"/></svg><kbd>⌘ K</kbd></button>
+        <button class="icon-button notification-button" aria-label="الإشعارات"><svg><use href="#i-bell"/></svg><i></i></button>
+        <button class="brief-button" id="brief-button"><svg><use href="#i-spark"/></svg><span>الموجز التنفيذي</span></button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <section class="view active" id="view-dashboard" data-view-section="dashboard">
+        <div class="hero-grid">
+          <article class="command-hero panel">
+            <div class="hero-copy">
+              <div class="eyebrow"><i></i> قناة القيادة الآمنة <span>ORION ONLINE</span></div>
+              <h1>مساء الخير، <span>أيها القائد.</span></h1>
+              <p id="hero-status-copy">كل الوحدات متصلة. يتم تحميل قرارات السلطة الحالية…</p>
+            </div>
+            <form class="command-box" id="command-form">
+              <div class="orion-avatar">O<span></span></div>
+              <label for="command-input">أصدر توجيهًا إلى Orion…</label>
+              <textarea id="command-input" rows="1" maxlength="500" placeholder="مثال: نفّذ خطة الأسبوع القادم"></textarea>
+              <div class="command-footer">
+                <div class="command-suggestions">
+                  <button type="button" data-command="نفّذ خطة الأسبوع القادم">خطة الأسبوع</button>
+                  <button type="button" data-command="جهّز تقرير سوق موريتانيا وفرص الاقتصاد الأزرق">تقرير موريتانيا</button>
+                  <button type="button" data-command="راجع حالة الأمن والثغرات في المشروع">فحص أمني</button>
+                </div>
+                <button type="submit" class="send-command" aria-label="إرسال التوجيه"><span>إرسال التوجيه</span><svg><use href="#i-arrow"/></svg></button>
+              </div>
+            </form>
+          </article>
+
+          <article class="health-card panel">
+            <div class="panel-heading compact"><div><span class="section-kicker">PROJECT PULSE</span><h2>صحة المشروع</h2></div><button aria-label="المزيد"><svg><use href="#i-more"/></svg></button></div>
+            <div class="health-main">
+              <div class="health-ring" id="health-ring" style="--health: 87"><div><b id="health-score">87</b><span>/100</span></div></div>
+              <div class="health-copy"><strong>خط أساس قوي</strong><span><i></i> وفق سجل Workforce الحالي</span><small>تقييم داخلي بواسطة Pulse</small></div>
+            </div>
+            <div class="health-footer"><div><span>السرعة</span><b>92</b></div><div><span>الجودة</span><b>89</b></div><div><span>المخاطر</span><b class="risk-number">18</b></div></div>
+          </article>
+        </div>
+
+        <div class="metrics-grid" id="metrics-grid"></div>
+
+        <div class="dashboard-grid">
+          <article class="panel workstreams-card">
+            <div class="panel-heading"><div><span class="section-kicker">OPERATIONAL READINESS</span><h2>جاهزية مسارات العمل</h2></div><button class="text-button" data-go-view="missions">عرض المهام <svg><use href="#i-chevron"/></svg></button></div>
+            <div class="workstreams" id="workstreams"></div>
+          </article>
+
+          <article class="panel decision-card">
+            <div class="panel-heading"><div><span class="section-kicker amber">COMMANDER ACTION</span><h2>قرارات تنتظر سلطتك</h2></div><span class="decision-count" id="decision-count">2</span></div>
+            <div id="decisions-list"></div>
+          </article>
+
+          <article class="panel team-preview-card">
+            <div class="panel-heading"><div><span class="section-kicker">AI WORKFORCE</span><h2>الفريق الآن</h2></div><button class="text-button" data-go-view="team">كل الموظفين <svg><use href="#i-chevron"/></svg></button></div>
+            <div class="agent-strip" id="agent-strip"></div>
+          </article>
+
+          <article class="panel live-feed-card">
+            <div class="panel-heading"><div><span class="section-kicker live-kicker"><i></i> LIVE SYSTEM FEED</span><h2>نبض العمليات</h2></div><button class="feed-pause" id="feed-pause" aria-label="إيقاف التغذية"><span></span><span></span></button></div>
+            <div class="feed-list" id="feed-list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-team" data-view-section="team">
+        <div class="page-lead">
+          <div><span class="section-kicker">AI EMPLOYEES · 11 UNITS</span><h1>فريق الذكاء الاصطناعي</h1><p>هوية وصلاحيات ومهام ومؤشرات واضحة لكل موظف — تحت سلطة قيادية واحدة.</p></div>
+          <div class="lead-actions"><div class="inline-search"><svg><use href="#i-search"/></svg><input id="agent-search" type="search" placeholder="ابحث عن موظف أو وحدة…"></div><button class="outline-button" id="org-chart-button"><svg><use href="#i-users"/></svg> الهيكل الإداري</button></div>
+        </div>
+        <div class="team-summary" id="team-summary"></div>
+        <div class="agent-grid" id="agent-grid"></div>
+      </section>
+
+      <section class="view" id="view-missions" data-view-section="missions">
+        <div class="page-lead">
+          <div><span class="section-kicker">MISSION CONTROL</span><h1>سجل المهام التنفيذي</h1><p>كل مهمة مرتبطة بمالك وأولوية وبوابة مراجعة قابلة للتدقيق.</p></div>
+          <div class="lead-actions"><button class="primary-button" id="new-command-button"><svg><use href="#i-command"/></svg> توجيه جديد</button></div>
+        </div>
+        <div class="task-toolbar panel">
+          <div class="task-tabs" id="task-tabs"><button class="active" data-task-filter="all">الكل</button><button data-task-filter="in_progress">قيد التنفيذ</button><button data-task-filter="review">المراجعة</button><button data-task-filter="blocked">المحظورة</button><button data-task-filter="completed">المكتملة</button></div>
+          <div class="inline-search"><svg><use href="#i-search"/></svg><input id="task-search" type="search" placeholder="ابحث في المهام…"></div>
+        </div>
+        <div class="task-board panel">
+          <div class="task-table-head"><span>المهمة</span><span>المالك</span><span>الحالة</span><span>الأولوية</span><span>التقدم</span><span>الاستحقاق</span></div>
+          <div id="task-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-runtime" data-view-section="runtime">
+        <div class="page-lead runtime-lead">
+          <div><span class="section-kicker">AGENT RUNTIME v2.1 · LOCAL SANDBOX</span><h1>محرك الوكلاء</h1><p>دورة تنفيذ فعلية للحالة والصفوف وبوابات القرار، مع سجل تدقيق لكل انتقال ودون السماح بأثر خارجي غير موثّق.</p></div>
+          <div class="runtime-online"><span class="runtime-orb"><i></i></span><div><strong>المحرك متصل</strong><small>AUDITABLE LOCAL EXECUTION</small></div></div>
+        </div>
+
+        <div class="runtime-summary" id="runtime-summary"></div>
+
+        <article class="panel runtime-pipeline-card">
+          <div class="panel-heading"><div><span class="section-kicker">ENFORCED LIFECYCLE</span><h2>دورة العمل الإلزامية</h2></div><div class="sandbox-chip"><svg><use href="#i-lock"/></svg> الآثار الخارجية متوقفة</div></div>
+          <div class="runtime-pipeline">
+            <div class="runtime-stage"><span>01</span><i></i><strong>PLAN</strong><small>Atlas</small></div><b></b>
+            <div class="runtime-stage"><span>02</span><i></i><strong>EXECUTE</strong><small>Sandbox</small></div><b></b>
+            <div class="runtime-stage"><span>03</span><i></i><strong>REVIEW</strong><small>Independent</small></div><b></b>
+            <div class="runtime-stage"><span>04</span><i></i><strong>SECURITY</strong><small>Sentinel</small></div><b></b>
+            <div class="runtime-stage sovereign"><span>05</span><i></i><strong>APPROVAL</strong><small>Local CEO gate</small></div><b></b>
+            <div class="runtime-stage"><span>06</span><i></i><strong>RELEASE</strong><small>Controlled</small></div><b></b>
+            <div class="runtime-stage"><span>07</span><i></i><strong>COMPLETE</strong><small>Athena</small></div>
+          </div>
+        </article>
+
+        <div class="runtime-layout">
+          <article class="panel runtime-queue-card">
+            <div class="panel-heading"><div><span class="section-kicker live-kicker"><i></i> WORK QUEUE</span><h2>صف التنفيذ</h2></div><div class="runtime-toolbar"><select id="runtime-filter" aria-label="تصفية دورات المحرك"><option value="active">الدورات النشطة</option><option value="all">كل الدورات</option><option value="waiting_approval">بانتظار الموافقة</option><option value="completed">المكتملة</option></select><button id="runtime-run-first"><svg><use href="#i-command"/></svg> تشغيل أول دورة آمنة</button></div></div>
+            <div class="runtime-queue" id="runtime-queue"></div>
+          </article>
+
+          <article class="panel runtime-audit-card">
+            <div class="panel-heading"><div><span class="section-kicker">IMMUTABLE TRACE</span><h2>سجل التدقيق</h2></div><span class="audit-count" id="audit-count">0 EVENTS</span></div>
+            <div class="runtime-audit" id="runtime-audit"></div>
+          </article>
+        </div>
+
+        <div class="runtime-boundary panel"><svg><use href="#i-shield"/></svg><div><strong>حدود التنفيذ الحالية</strong><p>المحرك يدير الحالة والتوزيع والمراجعة والأمن فعليًا داخل البيئة المحلية. مرحلة RELEASE تسجل إصدارًا محليًا فقط؛ GitHub وNotion والنشر الخارجي ستحتاج موصلات وصلاحيات منفصلة.</p></div><span>NO EXTERNAL SIDE EFFECTS</span></div>
+      </section>
+
+      <section class="view" id="view-intelligence" data-view-section="intelligence">
+        <div class="page-lead">
+          <div><span class="section-kicker">KNOWLEDGE & INTELLIGENCE</span><h1>العقل المعلوماتي</h1><p>إشارات سوق موثقة تتشارك فيها وحدات التحليل عبر Knowledge Core واحد.</p></div>
+          <div class="trust-badge"><svg><use href="#i-shield"/></svg><div><strong>91.4%</strong><span>متوسط ثقة المصادر</span></div></div>
+        </div>
+        <div class="intel-layout">
+          <article class="panel intel-map-card">
+            <div class="panel-heading"><div><span class="section-kicker">INTERNAL SIGNAL REGISTER</span><h2>الدول ذات الأولوية</h2></div><span class="updated-label">بيانات نموذجية · داخلية</span></div>
+            <div class="world-map" aria-label="تصور لخريطة مناطق المتابعة">
+              <div class="map-grid-lines"></div><div class="map-glow one"></div><div class="map-glow two"></div>
+              <div class="map-continent c1"></div><div class="map-continent c2"></div><div class="map-continent c3"></div><div class="map-continent c4"></div><div class="map-continent c5"></div>
+              <button class="map-point p-russia" data-country="روسيا"><i></i><span>روسيا</span></button>
+              <button class="map-point p-egypt" data-country="مصر"><i></i><span>مصر</span></button>
+              <button class="map-point hot p-mauritania" data-country="موريتانيا"><i></i><span>موريتانيا</span></button>
+              <button class="map-point p-norway" data-country="النرويج"><i></i><span>النرويج</span></button>
+              <button class="map-point p-china" data-country="الصين"><i></i><span>الصين</span></button>
+              <button class="map-point p-japan" data-country="اليابان"><i></i><span>اليابان</span></button>
+              <button class="map-point p-usa" data-country="USA"><i></i><span>USA</span></button>
+              <div class="map-legend"><span><i class="watch"></i> مراقبة</span><span><i class="opportunity"></i> فرصة نشطة</span></div>
+            </div>
+          </article>
+          <article class="panel intel-signals-card">
+            <div class="panel-heading"><div><span class="section-kicker amber">HIGH CONFIDENCE</span><h2>أحدث الإشارات</h2></div><button aria-label="المزيد"><svg><use href="#i-more"/></svg></button></div>
+            <div id="intel-signals"></div>
+          </article>
+        </div>
+        <div class="knowledge-strip panel">
+          <div class="knowledge-title"><span class="core-orb"><i></i></span><div><strong>ATLANTIS-X KNOWLEDGE CORE</strong><span>مصدر الحقيقة المشترك</span></div></div>
+          <div class="knowledge-layer"><span>STRUCTURED</span><strong>PostgreSQL</strong><small>جاهز للتهيئة</small></div>
+          <div class="connector-line"></div>
+          <div class="knowledge-layer"><span>RELATIONSHIPS</span><strong>Knowledge Graph</strong><small>مخطط v1</small></div>
+          <div class="connector-line"></div>
+          <div class="knowledge-layer"><span>SEMANTIC</span><strong>Vector Memory</strong><small>جاهز للتهيئة</small></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-security" data-view-section="security">
+        <div class="page-lead">
+          <div><span class="section-kicker">SENTINEL SECURITY LAYER</span><h1>الأمن والسياسات</h1><p>Sentinel يستطيع إيقاف الخطر، ولا يستطيع تجاوز السلطة الاستراتيجية للقائد.</p></div>
+          <div class="security-posture"><i></i><div><strong>الاحتواء المحلي مفعّل</strong><span>لا توجد آثار خارجية مسموحة</span></div></div>
+        </div>
+        <div class="security-grid">
+          <article class="panel security-score-card">
+            <span class="section-kicker">LOCAL POLICY POSTURE</span>
+            <div class="security-dial"><div><b>7</b><span>/7</span></div></div>
+            <h2>دورة الحواجز مفعّلة</h2><p>لا ندّعي وجود ماسح ثغرات خارجي في هذا الإصدار</p>
+            <div class="security-stats"><div><span>الأسرار</span><strong>موصل غير مفعّل</strong></div><div><span>الاعتماديات</span><strong>غير مفحوصة خارجيًا</strong></div><div><span>الوصول</span><strong>مفتاح قائد اختياري</strong></div></div>
+          </article>
+          <article class="panel policy-card">
+            <div class="panel-heading"><div><span class="section-kicker">ENFORCED WORKFLOW</span><h2>بوابة التسليم الآمن</h2></div><span class="policy-active"><i></i> مطبّقة</span></div>
+            <div class="policy-flow">
+              <div class="flow-step done"><span><svg><use href="#i-check"/></svg></span><strong>PLAN</strong><small>تحديد النطاق</small></div><i></i>
+              <div class="flow-step done"><span><svg><use href="#i-check"/></svg></span><strong>CODE</strong><small>فرع معزول</small></div><i></i>
+              <div class="flow-step done"><span><svg><use href="#i-check"/></svg></span><strong>TEST</strong><small>بوابة الجودة</small></div><i></i>
+              <div class="flow-step current"><span><svg><use href="#i-search"/></svg></span><strong>REVIEW</strong><small>مراجعة نظير</small></div><i></i>
+              <div class="flow-step"><span><svg><use href="#i-shield"/></svg></span><strong>SECURITY</strong><small>فحص Sentinel</small></div><i></i>
+              <div class="flow-step sovereign"><span><svg><use href="#i-lock"/></svg></span><strong>APPROVAL</strong><small>سلطة القائد</small></div><i></i>
+              <div class="flow-step"><span><svg><use href="#i-git"/></svg></span><strong>DEPLOY</strong><small>نشر مضبوط</small></div>
+            </div>
+            <div class="sovereign-note"><svg><use href="#i-lock"/></svg><div><strong>الحدود السيادية مفعّلة</strong><p>الحذف، الأموال، البيانات الحساسة، الصلاحيات الحرجة، النشر عالي الخطورة والعقود تتطلب قرارك الصريح.</p></div></div>
+          </article>
+        </div>
+        <div class="guardrail-grid">
+          <article class="guardrail panel"><div class="guardrail-icon aqua"><svg><use href="#i-git"/></svg></div><div><span>REPOSITORY</span><strong>سياسة المستودع</strong><p>مسار Pull Request وفحص الأسرار مطلوبان عند تركيب موصل GitHub.</p></div><b>POLICY</b></article>
+          <article class="guardrail panel"><div class="guardrail-icon violet"><svg><use href="#i-lock"/></svg></div><div><span>ACCESS</span><strong>أقل صلاحية</strong><p>لكل موظف نطاق أدوات واضح داخل سجل Workforce.</p></div><b>DECLARED</b></article>
+          <article class="guardrail panel"><div class="guardrail-icon amber"><svg><use href="#i-activity"/></svg></div><div><span>AUDIT</span><strong>تتبّع التشغيل</strong><p>كل مرحلة وقرار وتغيير حالة يُسجل في سجل runtime المحلي.</p></div><b>ACTIVE</b></article>
+        </div>
+      </section>
+
+      <section class="view" id="view-integrations" data-view-section="integrations">
+        <div class="page-lead">
+          <div><span class="section-kicker">SYSTEM LAYERS</span><h1>التكاملات</h1><p>كل أداة لها وظيفة واحدة. لا تظهر «متصلة» قبل تأكيد الاعتماد وفحص الصحة.</p></div>
+          <div class="honesty-badge"><svg><use href="#i-shield"/></svg> حالة ربط موثوقة</div>
+        </div>
+        <div class="integration-grid" id="integration-grid"></div>
+        <article class="panel integration-policy">
+          <div class="integration-policy-copy"><span class="section-kicker">INTEGRATION POLICY</span><h2>الربط يتم على ثلاث بوابات</h2><p>اعتماد آمن، اختبار قراءة محدود، ثم تفعيل الصلاحيات الدنيا فقط. لا يتم تخزين المفاتيح داخل الواجهة أو المستودع.</p></div>
+          <div class="integration-steps"><div class="active"><b>01</b><span>Credentials</span><small>خارج Git</small></div><i></i><div><b>02</b><span>Health check</span><small>قراءة فقط</small></div><i></i><div><b>03</b><span>Least privilege</span><small>نطاق محدد</small></div></div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <aside class="agent-drawer" id="agent-drawer" aria-hidden="true" aria-label="تفاصيل الموظف">
+    <button class="drawer-close" id="drawer-close" aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <div id="drawer-content"></div>
+  </aside>
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+
+  <dialog class="app-dialog" id="command-dialog">
+    <button class="dialog-close" data-close-dialog aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <div id="command-result"></div>
+  </dialog>
+
+  <dialog class="app-dialog authority-dialog" id="authority-dialog">
+    <form id="authority-form">
+      <div class="authority-mark"><svg><use href="#i-lock"/></svg><i></i></div>
+      <span class="section-kicker">COMMANDER AUTHORITY</span>
+      <h2>تحقق من جلسة القائد</h2>
+      <p>أدخل المفتاح المضبوط في متغير البيئة <b>ATLANTISX_COMMANDER_KEY</b>. يبقى المفتاح داخل جلسة المتصفح ولا يُكتب في المستودع.</p>
+      <label for="authority-key">مفتاح القائد</label>
+      <input id="authority-key" name="commander-key" type="password" required minlength="16" autocomplete="current-password" placeholder="••••••••••••">
+      <small class="form-message" id="authority-message" role="alert"></small>
+      <button class="dialog-action" id="authority-submit" type="submit">فتح مركز القيادة</button>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog sovereign-dialog" id="sovereign-dialog">
+    <button class="dialog-close" data-close-sovereign aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <form id="sovereign-form">
+      <div class="sovereign-dialog-icon" id="sovereign-dialog-icon"><svg><use href="#i-lock"/></svg></div>
+      <span class="section-kicker amber" id="sovereign-kicker">SOVEREIGN DECISION</span>
+      <h2 id="sovereign-title">مراجعة قرار سيادي</h2>
+      <p id="sovereign-description"></p>
+      <div class="sovereign-task-ticket"><span id="sovereign-task-id"></span><strong id="sovereign-task-name"></strong></div>
+      <label for="sovereign-note">ملاحظة القرار <small>اختيارية · تحفظ في سجل التدقيق</small></label>
+      <textarea id="sovereign-note" maxlength="300" rows="3" placeholder="حدّد النطاق أو سبب القرار…"></textarea>
+      <label class="sovereign-confirm"><input id="sovereign-confirm" type="checkbox" required><span id="sovereign-confirm-copy">راجعت النطاق وأؤكد هذا القرار صراحةً.</span></label>
+      <div class="sovereign-dialog-actions"><button type="button" data-close-sovereign>إلغاء</button><button type="submit" id="sovereign-submit">تأكيد القرار</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog brief-dialog" id="brief-dialog">
+    <button class="dialog-close" data-close-dialog aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <div class="brief-header"><div class="brand-mark"><span>AX</span></div><div><span>DAILY EXECUTIVE BRIEF</span><h2>الموجز التنفيذي</h2><p id="brief-date"></p></div></div>
+    <div id="brief-content"></div>
+  </dialog>
+
+  <dialog class="app-dialog org-dialog" id="org-dialog">
+    <button class="dialog-close" data-close-dialog aria-label="إغلاق"><svg><use href="#i-close"/></svg></button>
+    <span class="section-kicker">REPORTING STRUCTURE</span><h2>الهيكل الإداري</h2>
+    <div class="org-tree">
+      <div class="org-node ceo"><b>YOU</b><span>CEO / COMMANDER</span></div><i></i>
+      <div class="org-node orion"><b>ORION</b><span>Chief of Staff</span></div><i></i>
+      <div class="org-branches">
+        <div class="org-node">ATHENA<span>Executive Office</span></div><div class="org-node">ATLAS<span>Project Manager</span></div><div class="org-node">SENTINEL<span>Security</span></div><div class="org-node">PULSE<span>Performance</span></div><div class="org-node">NEXUS<span>Intelligence</span></div><div class="org-node">NOVA<span>Marketing</span></div>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

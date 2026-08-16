@@ -1,0 +1,13 @@
+services:
+  command-center:
+    build: .
+    ports:
+      - "4173:4173"
+    environment:
+      ATLANTISX_COMMANDER_KEY: "${ATLANTISX_COMMANDER_KEY:?Set ATLANTISX_COMMANDER_KEY before starting}"
+    volumes:
+      - atlantisx-state:/app/.atlantisx
+    restart: unless-stopped
+
+volumes:
+  atlantisx-state:

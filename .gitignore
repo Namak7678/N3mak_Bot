@@ -4,22 +4,15 @@
 .env.*
 !.env.example
 
-# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-
-# Native application build outputs
+# Node.js
 node_modules/
-src-tauri/target/
-src-tauri/gen/schemas/
-*.msi
-*.msix
-*.apk
-*.aab
-*.ipa
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
 
 # Editors / OS
 .vscode/
+.idea/
 .DS_Store
+*.swp

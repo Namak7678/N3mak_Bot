@@ -103,6 +103,43 @@ TELEGRAM_BOT_TOKEN=... npm run dev
 
 > ℹ️ A reference Node.js CI workflow lives at [`docs/ci/node.js.yml`](docs/ci/node.js.yml). Copy it to `.github/workflows/` (with the required `workflows` permission on your GitHub App) if you want CI on push.
 
+## 🩺 Local verification
+
+Before deploying, run a full environment check (Node version, env vars, Telegram API, Postgres, Redis, smoke tests):
+
+```bash
+# Create a .env file with your secrets (do NOT commit it)
+cp .env.example .env
+nano .env   # set TELEGRAM_BOT_TOKEN, DATABASE_URL, REDIS_URL
+
+# Run the verifier
+npm run verify
+```
+
+Expected output: `✅ Everything looks good. The bot is ready to run.`
+
+## 🚀 One-shot Railway setup
+
+After installing the Railway CLI (`npm i -g @railway/cli`) and running `railway login`, this script will create the project, add Postgres + Redis, deploy the service, set all env vars, generate a domain, register the webhook, and verify the health endpoint:
+
+```bash
+TELEGRAM_BOT_TOKEN=8162937803:AAHcwk2rUtMgwUNP9-z4SWX5_WWJIhCxJSk ./scripts/railway-setup.sh
+```
+
+Or just run it and enter the token when prompted:
+
+```bash
+./scripts/railway-setup.sh
+```
+
+## 🧪 Tests
+
+```bash
+npm test
+```
+
+The smoke-test suite (13 tests) covers module structure, exports, command registration, welcome message content, /help completeness, /markets coverage, webhook/polling decision logic, and the README contract.
+
 ## 📁 Project structure
 
 ```

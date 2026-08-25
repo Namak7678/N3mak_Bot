@@ -33,28 +33,43 @@ app.use(express.json());
 app.get('/', (_req, res) => res.send('N3mak bot server is running.'));
 app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 
-async function start() {
-  await initDb();
-
-  if (PUBLIC_URL) {
-    // Webhook mode (recommended for production / Railway)
-    const webhookPath = `/webhook/${BOT_TOKEN}`;
-    app.use(bot.webhookCallback(webhookPath));
-    await bot.telegram.setWebhook(`${PUBLIC_URL}${webhookPath}`);
-    console.log(`[bot] webhook set to ${PUBLIC_URL}${webhookPath}`);
-  } else {
-    // Fallback: long polling (fine for local dev, not for scale)
-    bot.launch();
-    console.log('[bot] running in polling mode (set PUBLIC_URL to enable webhook mode)');
-  }
-
-  app.listen(PORT, () => console.log(`[server] listening on port ${PORT}`));
+// Webhook route is mounted before listen() so it's ready even if
+// setWebhook() (a network call to Telegram) hasn't resolved yet.
+if (PUBLIC_URL) {
+  const webhookPath = `/webhook/${BOT_TOKEN}`;
+  app.use(bot.webhookCallback(webhookPath));
 }
 
-start().catch((err) => {
-  console.error('[fatal] startup failed:', err);
-  process.exit(1);
-});
+// Start listening immediately so Railway's healthcheck passes and the
+// service is never marked crashed just because a dependency is slow/down.
+app.listen(PORT, () => console.log(`[server] listening on port ${PORT}`));
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+async function connectWithRetry(name, fn, attempt = 1) {
+  try {
+    await fn();
+    console.log(`[${name}] ready`);
+  } catch (err) {
+    console.error(`[${name}] failed (attempt ${attempt}):`, err.message);
+    if (attempt < 5) {
+      setTimeout(() => connectWithRetry(name, fn, attempt + 1), attempt * 3000);
+    } else {
+      console.error(`[${name}] giving up after ${attempt} attempts — server stays up, will keep serving /api/health`);
+    }
+  }
+}
+
+connectWithRetry('db', initDb);
+
+if (PUBLIC_URL) {
+  const webhookPath = `/webhook/${BOT_TOKEN}`;
+  connectWithRetry('webhook', () => bot.telegram.setWebhook(`${PUBLIC_URL}${webhookPath}`));
+} else {
+  bot.launch();
+  console.log('[bot] running in polling mode (set PUBLIC_URL to enable webhook mode)');
+}
+
+process.once('uncaughtException', (err) => console.error('[uncaughtException]', err));
+process.once('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
+
+process.once('SIGINT', () => { bot.stop('SIGINT'); process.exit(0); });
+process.once('SIGTERM', () => { bot.stop('SIGTERM'); process.exit(0); });

@@ -2,9 +2,14 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway')
-    ? { rejectUnauthorized: false }
-    : false,
+  // Railway's internal network does not require/support TLS by default.
+  // Only force SSL if explicitly requested via DB_SSL=true.
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+});
+
+pool.on('error', (err) => {
+  // Prevent an idle client error from crashing the whole process
+  console.error('[db] unexpected pool error:', err.message);
 });
 
 async function initDb() {

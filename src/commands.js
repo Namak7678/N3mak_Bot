@@ -1,4 +1,6 @@
 const { upsertUser } = require('./db');
+const { formatMarketSnapshot } = require('./markets');
+const { isConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD } = require('./payments');
 
 const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK', '🇷🇺 Russia', '🌍 Africa'];
 
@@ -32,25 +34,59 @@ function registerCommands(bot) {
     )
   );
 
-  bot.command('invest', (ctx) =>
-    ctx.reply('💼 Investment opportunities are being prepared for your account. This section is coming online soon.')
-  );
+  bot.command('invest', async (ctx) => {
+    try {
+      const snapshot = await formatMarketSnapshot();
+      await ctx.reply(`💼 Opening investment window across global markets.\n\n${snapshot}\n\nUse /deposit to fund your wallet and get started.`);
+    } catch {
+      await ctx.reply('💼 Investment opportunities are being prepared for your account. Try /deposit to fund your wallet.');
+    }
+  });
 
   bot.command('portfolio', (ctx) =>
     ctx.reply('📊 You have no active investments yet. Use /invest to get started.')
   );
 
-  bot.command('deposit', (ctx) =>
-    ctx.reply('💳 To deposit funds, choose your currency (USD / AED). Payment integration is being connected.')
-  );
+  bot.command('deposit', async (ctx) => {
+    if (!isConfigured()) {
+      await ctx.reply('💳 Payment system is not activated yet by the N3mak team. Coming online soon.');
+      return;
+    }
+    await ctx.reply(
+      '💳 Choose a deposit amount (USD):',
+      {
+        reply_markup: {
+          inline_keyboard: [DEPOSIT_AMOUNTS_USD.map((a) => ({ text: `$${a}`, callback_data: `deposit:${a}` }))],
+        },
+      }
+    );
+  });
+
+  bot.action(/^deposit:(\d+)$/, async (ctx) => {
+    const amount = Number(ctx.match[1]);
+    try {
+      const url = await createDepositSession(amount, ctx.from.id);
+      await ctx.answerCbQuery();
+      await ctx.reply(`✅ Tap below to complete your $${amount} deposit securely via Stripe:\n${url}`);
+    } catch (err) {
+      console.error('[payments] session creation failed:', err.message);
+      await ctx.answerCbQuery('Failed to start payment', { show_alert: true });
+    }
+  });
 
   bot.command('withdraw', (ctx) =>
     ctx.reply('🏦 Withdrawal requests will appear here once your account has a balance.')
   );
 
-  bot.command('markets', (ctx) =>
-    ctx.reply(`🌍 Available global markets:\n\n${MARKETS.join('\n')}`)
-  );
+  bot.command('markets', async (ctx) => {
+    try {
+      const snapshot = await formatMarketSnapshot();
+      await ctx.reply(`🌍 Available global markets:\n${MARKETS.join('\n')}\n\n${snapshot}`);
+    } catch (err) {
+      console.error('[markets] rate fetch failed:', err.message);
+      await ctx.reply(`🌍 Available global markets:\n${MARKETS.join('\n')}`);
+    }
+  });
 
   bot.command('support', (ctx) =>
     ctx.reply('🛟 Need help? Our support team will be with you shortly. Please describe your issue.')

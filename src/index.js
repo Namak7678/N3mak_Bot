@@ -28,7 +28,11 @@ bot.use(async (ctx, next) => {
 registerCommands(bot);
 
 const app = express();
-app.use(express.json());
+// NOTE: no global express.json() here — Telegraf's webhookCallback()
+// needs to read the raw request body itself to parse incoming Telegram
+// updates. Adding a global JSON body-parser consumed the stream first,
+// which meant Telegram always got a 200 OK but the bot never actually
+// saw the message. None of our own routes need a parsed body.
 
 app.get('/', (_req, res) => res.send('N3mak bot server is running.'));
 app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));

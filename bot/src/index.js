@@ -40,8 +40,28 @@ const app = express();
 // which meant Telegram always got a 200 OK but the bot never actually
 // saw the message. None of our own routes need a parsed body.
 
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  next();
+});
+
 app.get('/', (_req, res) => res.send('N3mak bot server is running.'));
 app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+
+app.get('/api/stats', async (_req, res) => {
+  try {
+    const { pool } = require('./db');
+    const usersResult = await pool.query('SELECT COUNT(*)::int AS count FROM users');
+    res.status(200).json({
+      users: usersResult.rows[0].count,
+      markets: 6,
+    });
+  } catch (err) {
+    res.status(200).json({ users: 0, markets: 6 });
+  }
+});
 
 // Webhook route is mounted before listen() so it's ready even if
 // setWebhook() (a network call to Telegram) hasn't resolved yet.

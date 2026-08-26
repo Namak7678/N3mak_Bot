@@ -16,11 +16,17 @@ if (!BOT_TOKEN) {
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Rate limiting middleware (anti-flood)
+// Rate limiting middleware (anti-flood) — fails OPEN: if Redis is
+// down or slow, we let the message through rather than blocking every
+// command in the bot on an infrastructure hiccup.
 bot.use(async (ctx, next) => {
   if (ctx.from) {
-    const allowed = await checkRateLimit(ctx.from.id);
-    if (!allowed) return; // silently drop
+    try {
+      const allowed = await checkRateLimit(ctx.from.id);
+      if (!allowed) return; // silently drop actual flood
+    } catch (err) {
+      console.error('[ratelimit] check failed, allowing message through:', err.message);
+    }
   }
   return next();
 });

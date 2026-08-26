@@ -5,7 +5,11 @@ const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK'
 function registerCommands(bot) {
   bot.start(async (ctx) => {
     const payload = ctx.startPayload; // referral code if any
-    await upsertUser(ctx.from, payload ? Number(payload) : null);
+    try {
+      await upsertUser(ctx.from, payload ? Number(payload) : null);
+    } catch (err) {
+      console.error('[db] upsertUser failed (non-fatal):', err.message);
+    }
     await ctx.reply(
       `👋 Welcome to N3mak, ${ctx.from.first_name || ''}!\n\n` +
       `🌍💰 Your Smart Global Investment Platform.\n` +

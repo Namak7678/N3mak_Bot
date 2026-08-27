@@ -1,9 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const { Telegraf } = require('telegraf');
-const { initDb } = require('./db');
+const { pool, initDb, creditDeposit } = require('./db');
 const { checkRateLimit } = require('./redis');
 const { registerCommands } = require('./commands');
+const { verifyWebhookEvent } = require('./payments');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
@@ -61,6 +62,37 @@ app.get('/api/stats', async (_req, res) => {
   } catch (err) {
     res.status(200).json({ users: 0, markets: 6 });
   }
+});
+
+// Stripe webhook needs the RAW body to verify the signature — express.raw()
+// is scoped to only this one path, so it never touches Telegraf's own
+// webhook route or anything else.
+app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  let event;
+  try {
+    event = verifyWebhookEvent(req.body, req.headers['stripe-signature']);
+  } catch (err) {
+    console.error('[stripe webhook] signature check failed:', err.message);
+    return res.status(400).send('signature verification failed');
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const telegramId = Number(session.metadata?.telegram_id);
+    const amountUsd = session.amount_total / 100;
+    if (telegramId) {
+      try {
+        await creditDeposit(telegramId, amountUsd, session.id);
+        await bot.telegram.sendMessage(
+          telegramId,
+          `✅ Deposit confirmed: $${amountUsd}. Your wallet has been credited.\nUse /portfolio to check your balance.`
+        );
+      } catch (err) {
+        console.error('[stripe webhook] credit failed:', err.message);
+      }
+    }
+  }
+  res.json({ received: true });
 });
 
 // Webhook route is mounted before listen() so it's ready even if

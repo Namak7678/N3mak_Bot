@@ -1,4 +1,4 @@
-const { upsertUser } = require('./db');
+const { upsertUser, getBalance } = require('./db');
 const { formatMarketSnapshot } = require('./markets');
 const { isConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD } = require('./payments');
 
@@ -43,9 +43,19 @@ function registerCommands(bot) {
     }
   });
 
-  bot.command('portfolio', (ctx) =>
-    ctx.reply('📊 You have no active investments yet. Use /invest to get started.')
-  );
+  bot.command('portfolio', async (ctx) => {
+    try {
+      const balance = await getBalance(ctx.from.id);
+      if (balance > 0) {
+        await ctx.reply(`📊 Wallet balance: $${balance.toFixed(2)}\n\nNo active market positions yet — allocations are coming soon.`);
+      } else {
+        await ctx.reply('📊 Wallet balance: $0.00\n\nUse /deposit to fund your wallet and get started.');
+      }
+    } catch (err) {
+      console.error('[portfolio] failed:', err.message);
+      await ctx.reply('📊 Unable to load your balance right now, try again shortly.');
+    }
+  });
 
   bot.command('deposit', async (ctx) => {
     if (!isConfigured()) {

@@ -21,7 +21,19 @@ async function initDb() {
       first_name TEXT,
       language_code TEXT DEFAULT 'en',
       currency TEXT DEFAULT 'USD',
+      balance_usd NUMERIC(18,2) NOT NULL DEFAULT 0,
       referred_by BIGINT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_usd NUMERIC(18,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS deposits (
+      id BIGSERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      amount_usd NUMERIC(18,2) NOT NULL,
+      stripe_session_id TEXT UNIQUE NOT NULL,
+      status TEXT DEFAULT 'completed',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
@@ -38,6 +50,39 @@ async function initDb() {
   console.log('[db] tables ready');
 }
 
+async function getBalance(telegramId) {
+  const r = await pool.query('SELECT balance_usd FROM users WHERE telegram_id = $1', [telegramId]);
+  return r.rows[0] ? Number(r.rows[0].balance_usd) : 0;
+}
+
+// Idempotent: relies on the UNIQUE constraint on stripe_session_id so a
+// retried/duplicated Stripe webhook event can never double-credit a wallet.
+async function creditDeposit(telegramId, amountUsd, stripeSessionId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const inserted = await client.query(
+      `INSERT INTO deposits (telegram_id, amount_usd, stripe_session_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (stripe_session_id) DO NOTHING
+       RETURNING id`,
+      [telegramId, amountUsd, stripeSessionId]
+    );
+    if (inserted.rowCount > 0) {
+      await client.query(
+        'UPDATE users SET balance_usd = balance_usd + $1 WHERE telegram_id = $2',
+        [amountUsd, telegramId]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function upsertUser(telegramUser, referredBy) {
   const { id, username, first_name, language_code } = telegramUser;
   await pool.query(
@@ -49,4 +94,4 @@ async function upsertUser(telegramUser, referredBy) {
   );
 }
 
-module.exports = { pool, initDb, upsertUser };
+module.exports = { pool, initDb, upsertUser, getBalance, creditDeposit };

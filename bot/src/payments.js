@@ -10,9 +10,16 @@ function isConfigured() {
   return !!stripe;
 }
 
+function verifyWebhookEvent(rawBody, signature) {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    throw new Error('STRIPE_WEBHOOK_SECRET not set');
+  }
+  return stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
+}
+
 async function createDepositSession(amountUsd, telegramId) {
-  const successUrl = `${process.env.PUBLIC_URL || 'https://t.me'}/deposit-success`;
-  const cancelUrl = `${process.env.PUBLIC_URL || 'https://t.me'}/deposit-cancelled`;
+  const successUrl = 'https://t.me/N3mak_bot?start=deposit_ok';
+  const cancelUrl = 'https://t.me/N3mak_bot?start=deposit_cancelled';
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
@@ -34,4 +41,4 @@ async function createDepositSession(amountUsd, telegramId) {
   return session.url;
 }
 
-module.exports = { isConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD };
+module.exports = { isConfigured, createDepositSession, verifyWebhookEvent, DEPOSIT_AMOUNTS_USD };

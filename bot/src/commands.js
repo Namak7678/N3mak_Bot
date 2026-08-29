@@ -123,6 +123,19 @@ function registerCommands(bot) {
   bot.command('language', (ctx) =>
     ctx.reply('🌐 Language selection is coming soon. Currently supported: English, العربية, Русский.')
   );
+
+  bot.command('chatid', (ctx) => {
+    console.log(`[chatid] ${ctx.chat.type} -> ${ctx.chat.id} (${ctx.chat.title || ctx.chat.username || ''})`);
+    ctx.reply(`Chat ID: ${ctx.chat.id}`);
+  });
+
+  bot.on('channel_post', (ctx) => {
+    if (ctx.channelPost.text === '/chatid') {
+      const chat = ctx.channelPost.chat;
+      console.log(`[chatid] channel -> ${chat.id} (${chat.title || chat.username || ''})`);
+      ctx.telegram.sendMessage(chat.id, `Chat ID: ${chat.id}`).catch(() => {});
+    }
+  });
 }
 
 module.exports = { registerCommands };

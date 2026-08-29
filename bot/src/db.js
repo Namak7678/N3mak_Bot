@@ -32,11 +32,16 @@ async function initDb() {
       id BIGSERIAL PRIMARY KEY,
       telegram_id BIGINT NOT NULL,
       amount_usd NUMERIC(18,2) NOT NULL,
+      fee_usd NUMERIC(18,2) NOT NULL DEFAULT 0,
+      credited_usd NUMERIC(18,2) NOT NULL,
       stripe_session_id TEXT UNIQUE NOT NULL,
       status TEXT DEFAULT 'completed',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  await pool.query(`ALTER TABLE deposits ADD COLUMN IF NOT EXISTS fee_usd NUMERIC(18,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE deposits ADD COLUMN IF NOT EXISTS credited_usd NUMERIC(18,2);`);
+  await pool.query(`UPDATE deposits SET credited_usd = amount_usd WHERE credited_usd IS NULL;`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS portfolios (
       id BIGSERIAL PRIMARY KEY,
@@ -55,32 +60,51 @@ async function getBalance(telegramId) {
   return r.rows[0] ? Number(r.rows[0].balance_usd) : 0;
 }
 
+const PLATFORM_FEE_RATE = 0.02; // 2% real, disclosed platform fee — N3mak's actual revenue
+
 // Idempotent: relies on the UNIQUE constraint on stripe_session_id so a
 // retried/duplicated Stripe webhook event can never double-credit a wallet.
+// A 2% platform fee is retained as real N3mak revenue; the rest is credited
+// to the user's wallet.
 async function creditDeposit(telegramId, amountUsd, stripeSessionId) {
+  const fee = Math.round(amountUsd * PLATFORM_FEE_RATE * 100) / 100;
+  const credited = Math.round((amountUsd - fee) * 100) / 100;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const inserted = await client.query(
-      `INSERT INTO deposits (telegram_id, amount_usd, stripe_session_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO deposits (telegram_id, amount_usd, fee_usd, credited_usd, stripe_session_id)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (stripe_session_id) DO NOTHING
        RETURNING id`,
-      [telegramId, amountUsd, stripeSessionId]
+      [telegramId, amountUsd, fee, credited, stripeSessionId]
     );
     if (inserted.rowCount > 0) {
       await client.query(
         'UPDATE users SET balance_usd = balance_usd + $1 WHERE telegram_id = $2',
-        [amountUsd, telegramId]
+        [credited, telegramId]
       );
     }
     await client.query('COMMIT');
+    return { fee, credited };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+}
+
+async function getPlatformRevenue() {
+  const r = await pool.query(`
+    SELECT
+      COALESCE(SUM(fee_usd), 0)::numeric AS total_fees,
+      COALESCE(SUM(amount_usd), 0)::numeric AS total_deposited,
+      COUNT(*)::int AS deposit_count
+    FROM deposits
+    WHERE stripe_session_id NOT LIKE 'referral:%'
+  `);
+  return r.rows[0];
 }
 
 async function upsertUser(telegramUser, referredBy) {
@@ -103,4 +127,4 @@ async function creditReferralBonus(referrerTelegramId, newUserTelegramId) {
   await creditDeposit(referrerTelegramId, REFERRAL_BONUS_USD, `referral:${newUserTelegramId}`);
 }
 
-module.exports = { pool, initDb, upsertUser, getBalance, creditDeposit, creditReferralBonus };
+module.exports = { pool, initDb, upsertUser, getBalance, creditDeposit, creditReferralBonus, getPlatformRevenue };

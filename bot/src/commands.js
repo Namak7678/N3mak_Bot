@@ -1,4 +1,4 @@
-const { upsertUser, getBalance, creditReferralBonus } = require('./db');
+const { upsertUser, getBalance, creditReferralBonus, getPlatformRevenue } = require('./db');
 const { formatMarketSnapshot } = require('./markets');
 const { isConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD } = require('./payments');
 
@@ -75,7 +75,7 @@ function registerCommands(bot) {
       return;
     }
     await ctx.reply(
-      '💳 Choose a deposit amount (USD):',
+      '💳 Choose a deposit amount (USD). A 2% platform fee applies; the rest is credited to your wallet instantly:',
       {
         reply_markup: {
           inline_keyboard: [DEPOSIT_AMOUNTS_USD.map((a) => ({ text: `$${a}`, callback_data: `deposit:${a}` }))],
@@ -134,6 +134,28 @@ function registerCommands(bot) {
       const chat = ctx.channelPost.chat;
       console.log(`[chatid] channel -> ${chat.id} (${chat.title || chat.username || ''})`);
       ctx.telegram.sendMessage(chat.id, `Chat ID: ${chat.id}`).catch(() => {});
+    }
+  });
+
+  // Owner-only: real platform revenue (2% fee), not the total held in
+  // user wallets — that money belongs to users, not to N3mak.
+  bot.command('revenue', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from.id) !== String(ownerId)) {
+      return; // silently ignore for everyone else
+    }
+    try {
+      const { total_fees, total_deposited, deposit_count } = await getPlatformRevenue();
+      await ctx.reply(
+        `📈 N3mak platform revenue\n\n` +
+        `Real earned fees (2%): $${Number(total_fees).toFixed(2)}\n` +
+        `Total deposited by users: $${Number(total_deposited).toFixed(2)}\n` +
+        `Number of deposits: ${deposit_count}\n\n` +
+        `⚠️ Only the fee is N3mak's — the rest is user wallet balance, not profit.`
+      );
+    } catch (err) {
+      console.error('[revenue] failed:', err.message);
+      await ctx.reply('Could not load revenue right now.');
     }
   });
 }

@@ -1,4 +1,4 @@
-const { upsertUser, getBalance } = require('./db');
+const { upsertUser, getBalance, creditReferralBonus } = require('./db');
 const { formatMarketSnapshot } = require('./markets');
 const { isConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD } = require('./payments');
 
@@ -7,11 +7,23 @@ const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK'
 function registerCommands(bot) {
   bot.start(async (ctx) => {
     const payload = ctx.startPayload; // referral code if any
+    const referredBy = payload ? Number(payload) : null;
+    let isNewUser = false;
     try {
-      await upsertUser(ctx.from, payload ? Number(payload) : null);
+      isNewUser = await upsertUser(ctx.from, referredBy);
     } catch (err) {
       console.error('[db] upsertUser failed (non-fatal):', err.message);
     }
+
+    if (isNewUser && referredBy && referredBy !== ctx.from.id) {
+      try {
+        await creditReferralBonus(referredBy, ctx.from.id);
+        await ctx.telegram.sendMessage(referredBy, `🎉 Someone joined using your referral link! $1 bonus credited to your wallet.`).catch(() => {});
+      } catch (err) {
+        console.error('[referral] bonus credit failed (non-fatal):', err.message);
+      }
+    }
+
     await ctx.reply(
       `👋 Welcome to N3mak, ${ctx.from.first_name || ''}!\n\n` +
       `🌍💰 Your Smart Global Investment Platform.\n` +
@@ -105,7 +117,7 @@ function registerCommands(bot) {
   bot.command('referral', async (ctx) => {
     const botInfo = await ctx.telegram.getMe();
     const link = `https://t.me/${botInfo.username}?start=${ctx.from.id}`;
-    await ctx.reply(`🎁 Share your referral link and earn rewards:\n${link}`);
+    await ctx.reply(`🎁 Invite friends and earn $1 per signup, credited straight to your wallet:\n${link}`);
   });
 
   bot.command('language', (ctx) =>

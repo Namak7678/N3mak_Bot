@@ -4,6 +4,7 @@ const { Telegraf } = require('telegraf');
 const { pool, initDb, creditDeposit } = require('./db');
 const { checkRateLimit } = require('./redis');
 const { registerCommands } = require('./commands');
+const { startScheduledPosts } = require('./scheduler');
 const { verifyWebhookEvent } = require('./payments');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -33,6 +34,7 @@ bot.use(async (ctx, next) => {
 });
 
 registerCommands(bot);
+startScheduledPosts(bot);
 
 const app = express();
 // NOTE: no global express.json() here — Telegraf's webhookCallback()

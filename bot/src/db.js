@@ -85,13 +85,22 @@ async function creditDeposit(telegramId, amountUsd, stripeSessionId) {
 
 async function upsertUser(telegramUser, referredBy) {
   const { id, username, first_name, language_code } = telegramUser;
-  await pool.query(
+  const result = await pool.query(
     `INSERT INTO users (telegram_id, username, first_name, language_code, referred_by)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (telegram_id) DO UPDATE
-       SET username = EXCLUDED.username, first_name = EXCLUDED.first_name`,
+       SET username = EXCLUDED.username, first_name = EXCLUDED.first_name
+     RETURNING (xmax = 0) AS is_new`,
     [id, username || null, first_name || null, language_code || 'en', referredBy || null]
   );
+  return result.rows[0].is_new;
 }
 
-module.exports = { pool, initDb, upsertUser, getBalance, creditDeposit };
+const REFERRAL_BONUS_USD = 1;
+
+async function creditReferralBonus(referrerTelegramId, newUserTelegramId) {
+  // idempotent: one bonus per referred user, enforced by unique session id below
+  await creditDeposit(referrerTelegramId, REFERRAL_BONUS_USD, `referral:${newUserTelegramId}`);
+}
+
+module.exports = { pool, initDb, upsertUser, getBalance, creditDeposit, creditReferralBonus };

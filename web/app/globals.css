@@ -183,3 +183,70 @@ footer {
 }
 
 footer a { color: var(--teal); text-decoration: none; }
+
+/* --- Navbar --- */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(7,21,40,0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.navbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  gap: 20px;
+}
+.brand { color: #fff; font-weight: 900; text-decoration: none; font-size: 18px; }
+.brand .v2 { font-size: 11px; background: rgba(0,217,165,0.2); color: var(--teal); padding: 2px 8px; border-radius: 999px; margin-right: 6px; }
+.nav-links { display: flex; gap: 18px; flex: 1; justify-content: center; }
+.nav-links a { color: #C6D2E0; text-decoration: none; font-size: 14px; }
+.nav-links a:hover { color: #fff; }
+.nav-cta { display: flex; align-items: center; gap: 14px; }
+.nav-cta > a { color: #C6D2E0; text-decoration: none; font-size: 14px; }
+.btn-pill {
+  background: linear-gradient(90deg, var(--teal), var(--blue));
+  color: var(--navy-deep) !important;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+@media (max-width: 860px) { .nav-links { display: none; } }
+
+/* --- Sub-pages (feed, analyze, etc.) --- */
+.page-head { text-align: center; padding: 56px 0 32px; }
+.page-head h1 { font-size: clamp(28px, 4vw, 40px); margin: 0 0 10px; }
+.page-head p { color: #9FB0C3; }
+
+.data-card {
+  background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.live-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+.live-grid .data-card { text-align: center; }
+.live-grid .num { font-family: 'Tajawal', sans-serif; font-weight: 900; font-size: 30px; color: var(--teal); display: block; }
+.live-grid .lbl { color: #9FB0C3; font-size: 13px; margin-top: 6px; display: block; }
+
+.category-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 20px; }
+.category-list .data-card h3 { margin: 0 0 6px; color: #fff; font-size: 16px; }
+.category-list .data-card p { margin: 0; color: #9FB0C3; font-size: 13px; }
+.status-badge { display: inline-block; font-size: 11px; padding: 3px 10px; border-radius: 999px; margin-top: 10px; }
+.status-live { background: rgba(0,217,165,0.15); color: var(--teal); }
+.status-soon { background: rgba(201,162,39,0.15); color: var(--gold); }
+
+.roadmap-box { max-width: 640px; margin: 40px auto 0; }
+.roadmap-box ul { padding-right: 20px; color: #C6D2E0; line-height: 2; }
+
+.simple-form { max-width: 380px; margin: 40px auto; text-align: center; }
+.simple-form p { color: #9FB0C3; margin-bottom: 24px; line-height: 1.8; }

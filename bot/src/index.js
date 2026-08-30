@@ -10,6 +10,12 @@ const { verifyWebhookEvent } = require('./payments');
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
 const PUBLIC_URL = process.env.PUBLIC_URL; // e.g. https://n3mak-api-production.up.railway.app
+// A separate, URL-safe secret for the webhook path — the raw bot token
+// contains a ':' which can get inconsistently encoded/decoded between
+// what Telegram registers and what Express actually receives, silently
+// breaking exact-path matching. A plain alphanumeric secret avoids that
+// class of bug entirely.
+const WEBHOOK_SECRET = (process.env.WEBHOOK_SECRET || BOT_TOKEN || '').replace(/[^a-zA-Z0-9]/g, '');
 
 if (!BOT_TOKEN) {
   console.error('[fatal] TELEGRAM_BOT_TOKEN is not set');
@@ -17,6 +23,11 @@ if (!BOT_TOKEN) {
 }
 
 const bot = new Telegraf(BOT_TOKEN);
+
+bot.use(async (ctx, next) => {
+  console.log(`[update] ${ctx.updateType} from ${ctx.from?.id || ctx.chat?.id || 'unknown'}`);
+  return next();
+});
 
 // Rate limiting middleware (anti-flood) — fails OPEN: if Redis is
 // down or slow, we let the message through rather than blocking every
@@ -100,7 +111,7 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
 // Webhook route is mounted before listen() so it's ready even if
 // setWebhook() (a network call to Telegram) hasn't resolved yet.
 if (PUBLIC_URL) {
-  const webhookPath = `/webhook/${BOT_TOKEN}`;
+  const webhookPath = `/webhook/${WEBHOOK_SECRET}`;
   app.use(bot.webhookCallback(webhookPath));
 }
 
@@ -125,7 +136,7 @@ async function connectWithRetry(name, fn, attempt = 1) {
 connectWithRetry('db', initDb);
 
 if (PUBLIC_URL) {
-  const webhookPath = `/webhook/${BOT_TOKEN}`;
+  const webhookPath = `/webhook/${WEBHOOK_SECRET}`;
   connectWithRetry('webhook', () => bot.telegram.setWebhook(`${PUBLIC_URL}${webhookPath}`));
 } else {
   bot.launch();

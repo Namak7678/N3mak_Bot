@@ -3,7 +3,7 @@
 سيرفر بوت تيليجرام أساسي لمنصة N3mak — Node.js + Telegraf + Express، متصل بـ Postgres وRedis.
 
 ## الأوامر المدعومة
-/start /help /invest /portfolio /deposit /withdraw /markets /support /referral /language
+/start /help /invest /portfolio /deposit /withdraw /markets /ask /support /referral /language
 
 ## يشمل
 - Webhook mode جاهز للإنتاج (يفعّل تلقائياً لو `PUBLIC_URL` متظبط)
@@ -28,3 +28,17 @@ git branch -M main
 git remote add origin https://github.com/<username>/<repo>.git
 git push -u origin main --force
 ```
+
+## OmniRoute → Grok
+
+Optional AI path via the OmniRoute fork (`Namak7678/omniroute`):
+
+```
+OPENAI_BASE_URL=http://127.0.0.1:20128/v1
+OPENAI_API_KEY=n3mak-local
+OPENAI_MODEL=xai/grok-4.3
+```
+
+See `docs/N3MAK_GROK.md` in the OmniRoute repo. Helper: `bot/src/llm.js`.
+
+When `OPENAI_BASE_URL` is set, `/ask <question>` routes through OmniRoute → Grok and soft-fails if the gateway is down.

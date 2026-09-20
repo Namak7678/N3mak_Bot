@@ -1,11 +1,11 @@
 /**
- * Thin OpenAI-compatible client for OmniRoute → Grok.
+ * Thin OpenAI-compatible client for OmniRoute → free CFP / optional Grok.
  * Set OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL (see .env.example).
  * Callers should fail soft if the gateway is unreachable.
  */
 const BASE = (process.env.OPENAI_BASE_URL || '').replace(/\/$/, '');
 const KEY = process.env.OPENAI_API_KEY || 'n3mak-local';
-const MODEL = process.env.OPENAI_MODEL || 'xai/grok-4.3';
+const MODEL = process.env.OPENAI_MODEL || 'cfp/openai/gpt-oss-20b';
 
 function isEnabled() {
   return Boolean(BASE);

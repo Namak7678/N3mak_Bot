@@ -1,6 +1,7 @@
 const { upsertUser, getBalance, creditReferralBonus, getPlatformRevenue } = require('./db');
 const { formatMarketSnapshot } = require('./markets');
 const { isConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD } = require('./payments');
+const { chat: llmChat, isEnabled: llmEnabled } = require('./llm');
 
 const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK', '🇷🇺 Russia', '🌍 Africa'];
 
@@ -40,6 +41,7 @@ function registerCommands(bot) {
       `/deposit - Add funds in your preferred currency\n` +
       `/withdraw - Withdraw your profits or balance\n` +
       `/markets - Browse available global markets\n` +
+      `/ask - Ask N3mak AI (OmniRoute → Grok)\n` +
       `/support - Contact our support team\n` +
       `/referral - Share your invite link & earn rewards\n` +
       `/language - Change bot language`
@@ -107,6 +109,35 @@ function registerCommands(bot) {
     } catch (err) {
       console.error('[markets] rate fetch failed:', err.message);
       await ctx.reply(`🌍 Available global markets:\n${MARKETS.join('\n')}`);
+    }
+  });
+
+
+  // OmniRoute → Grok AI path (optional). Soft-fails if gateway is down.
+  bot.command('ask', async (ctx) => {
+    const question = (ctx.message?.text || '').replace(/^\/ask(@\w+)?\s*/i, '').trim();
+    if (!question) {
+      await ctx.reply('Usage: /ask <your question>');
+      return;
+    }
+    if (!llmEnabled()) {
+      await ctx.reply('AI is not configured yet (set OPENAI_BASE_URL to enable OmniRoute → Grok).');
+      return;
+    }
+    try {
+      await ctx.sendChatAction('typing').catch(() => {});
+      const answer = await llmChat([
+        {
+          role: 'system',
+          content:
+            'You are N3mak assistant for a global investment Telegram bot. Be concise, helpful, and honest. Do not invent balances, deposits, or market guarantees.',
+        },
+        { role: 'user', content: question },
+      ]);
+      await ctx.reply(answer || 'No response from AI.');
+    } catch (err) {
+      console.error('[llm] ask failed (soft):', err.message);
+      await ctx.reply('AI is temporarily unavailable. Try again later or use /support.');
     }
   });
 

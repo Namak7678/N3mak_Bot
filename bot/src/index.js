@@ -1,13 +1,10 @@
 require('dotenv').config();
 const express = require('express');
-const { Telegraf } = require('telegraf');
 const { pool, initDb, creditDeposit } = require('./db');
-const { checkRateLimit } = require('./redis');
-const { registerCommands } = require('./commands');
+const { bot } = require('./bot-instance');
 const { startScheduledPosts } = require('./scheduler');
 const { verifyWebhookEvent } = require('./payments');
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
 const PUBLIC_URL = process.env.PUBLIC_URL; // e.g. https://n3mak-api-production.up.railway.app
 // A separate, URL-safe secret for the webhook path — the raw bot token
@@ -15,36 +12,13 @@ const PUBLIC_URL = process.env.PUBLIC_URL; // e.g. https://n3mak-api-production.
 // what Telegram registers and what Express actually receives, silently
 // breaking exact-path matching. A plain alphanumeric secret avoids that
 // class of bug entirely.
-const WEBHOOK_SECRET = (process.env.WEBHOOK_SECRET || BOT_TOKEN || '').replace(/[^a-zA-Z0-9]/g, '');
+const WEBHOOK_SECRET = (process.env.WEBHOOK_SECRET || process.env.TELEGRAM_BOT_TOKEN || '').replace(/[^a-zA-Z0-9]/g, '');
 
-if (!BOT_TOKEN) {
+if (!process.env.TELEGRAM_BOT_TOKEN) {
   console.error('[fatal] TELEGRAM_BOT_TOKEN is not set');
   process.exit(1);
 }
 
-const bot = new Telegraf(BOT_TOKEN);
-
-bot.use(async (ctx, next) => {
-  console.log(`[update] ${ctx.updateType} from ${ctx.from?.id || ctx.chat?.id || 'unknown'}`);
-  return next();
-});
-
-// Rate limiting middleware (anti-flood) — fails OPEN: if Redis is
-// down or slow, we let the message through rather than blocking every
-// command in the bot on an infrastructure hiccup.
-bot.use(async (ctx, next) => {
-  if (ctx.from) {
-    try {
-      const allowed = await checkRateLimit(ctx.from.id);
-      if (!allowed) return; // silently drop actual flood
-    } catch (err) {
-      console.error('[ratelimit] check failed, allowing message through:', err.message);
-    }
-  }
-  return next();
-});
-
-registerCommands(bot);
 startScheduledPosts(bot);
 
 const app = express();

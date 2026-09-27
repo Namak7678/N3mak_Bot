@@ -18,6 +18,24 @@ const PROMO_MESSAGES = [
 
 let cursor = 0;
 
+// One promo post, sent once. Used by:
+//   - the node-cron schedule below (Railway, long-running process)
+//   - api/cron-promo.js (Vercel Cron — Hobby plan allows once/day only,
+//     so on Vercel this fires once daily instead of twice)
+async function postOnce(bot) {
+  const channelId = process.env.TELEGRAM_CHANNEL_ID;
+  if (!channelId) {
+    console.log('[scheduler] TELEGRAM_CHANNEL_ID not set — auto-posting disabled');
+    return { posted: false, reason: 'no-channel' };
+  }
+  const gen = PROMO_MESSAGES[cursor % PROMO_MESSAGES.length];
+  cursor += 1;
+  const text = await gen();
+  await bot.telegram.sendMessage(channelId, text);
+  console.log('[scheduler] posted to channel');
+  return { posted: true };
+}
+
 function startScheduledPosts(bot) {
   const channelId = process.env.TELEGRAM_CHANNEL_ID;
   if (!channelId) {
@@ -26,13 +44,10 @@ function startScheduledPosts(bot) {
   }
 
   // Every day at 12:00 and 20:00 server time (UTC on Railway).
+  // (Vercel Hobby cron can only run once/day — see api/cron-promo.js)
   cron.schedule('0 12,20 * * *', async () => {
     try {
-      const gen = PROMO_MESSAGES[cursor % PROMO_MESSAGES.length];
-      cursor += 1;
-      const text = await gen();
-      await bot.telegram.sendMessage(channelId, text);
-      console.log('[scheduler] posted to channel');
+      await postOnce(bot);
     } catch (err) {
       console.error('[scheduler] post failed:', err.message);
     }
@@ -41,4 +56,4 @@ function startScheduledPosts(bot) {
   console.log(`[scheduler] auto-posting enabled for channel ${channelId} (12:00 & 20:00 UTC)`);
 }
 
-module.exports = { startScheduledPosts };
+module.exports = { startScheduledPosts, postOnce };

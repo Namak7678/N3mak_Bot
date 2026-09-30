@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
   }
   try {
     await ensureDbReady();
-    await bot.handleUpdate(req.body, res);
+    await bot.handleUpdate(req.body);
   } catch (err) {
     console.error('[telegram webhook] error:', err.message);
   } finally {

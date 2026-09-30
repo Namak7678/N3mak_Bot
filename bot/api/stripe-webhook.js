@@ -5,8 +5,6 @@ const { creditDeposit } = require('../src/db');
 const { bot } = require('../src/bot-instance');
 const { ensureDbReady } = require('./_init');
 
-module.exports.config = { api: { bodyParser: false } };
-
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -16,7 +14,7 @@ function readRawBody(req) {
   });
 }
 
-module.exports = async (req, res) => {
+async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).end();
     return;
@@ -49,4 +47,7 @@ module.exports = async (req, res) => {
     }
   }
   res.status(200).json({ received: true });
-};
+}
+
+handler.config = { api: { bodyParser: false } };
+module.exports = handler;

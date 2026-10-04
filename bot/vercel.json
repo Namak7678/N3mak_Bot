@@ -2,8 +2,21 @@
   "version": 2,
   "builds": [{ "src": "api/*.js", "use": "@vercel/node" }],
   "routes": [
-    { "handle": "filesystem" },
-    { "src": "/api/(.*)", "dest": "/api/$1.js" }
+    { "src": "^/$", "dest": "/api/health.js" },
+    { "src": "^/health$", "dest": "/api/health.js" },
+    { "src": "^/stats$", "dest": "/api/stats.js" },
+    { "src": "^/webhook/stripe/?$", "dest": "/api/stripe-webhook.js" },
+    { "src": "^/stripe-webhook/?$", "dest": "/api/stripe-webhook.js" },
+    { "src": "^/api/stripe-webhook/?$", "dest": "/api/stripe-webhook.js" },
+    { "src": "^/webhook(?:/.*)?$", "dest": "/api/telegram.js" },
+    { "src": "^/api/webhook/?$", "dest": "/api/telegram.js" },
+    { "src": "^/api/telegram/?$", "dest": "/api/telegram.js" },
+    { "src": "^/api/health/?$", "dest": "/api/health.js" },
+    { "src": "^/api/stats/?$", "dest": "/api/stats.js" },
+    { "src": "^/api/setup-webhook/?$", "dest": "/api/setup-webhook.js" },
+    { "src": "^/api/cron-promo/?$", "dest": "/api/cron-promo.js" },
+    { "src": "^/api/(.+)\\.js$", "dest": "/api/$1.js" },
+    { "src": "^/api/(.*)$", "dest": "/api/$1.js" }
   ],
   "crons": [
     { "path": "/api/cron-promo", "schedule": "0 12 * * *" }

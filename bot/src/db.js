@@ -80,10 +80,11 @@ async function creditDeposit(telegramId, amountUsd, stripeSessionId) {
       [telegramId, amountUsd, fee, credited, stripeSessionId]
     );
     if (inserted.rowCount > 0) {
-      await client.query(
-        'UPDATE users SET balance_usd = balance_usd + $1 WHERE telegram_id = $2',
+      const userUpdate = await client.query(
+        'UPDATE users SET balance_usd = balance_usd + $1 WHERE telegram_id = $2 RETURNING telegram_id',
         [credited, telegramId]
       );
+      if (userUpdate.rowCount !== 1) throw new Error('Cannot credit a deposit for an unknown Telegram user');
     }
     await client.query('COMMIT');
     return { fee, credited };

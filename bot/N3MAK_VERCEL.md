@@ -17,7 +17,8 @@ setup, used because Railway's trial expired. Trade-offs vs. Railway:
 - `TELEGRAM_BOT_TOKEN`
 - `DATABASE_URL` (Neon connection string)
 - `DB_SSL=true` (Neon requires TLS; this repo only enables it when this is set)
-- `SETUP_SECRET` — any random string you pick, protects `/api/setup-webhook`
+- `SETUP_SECRET` — required; protects the one-time webhook setup endpoint.
+- `PUBLIC_URL` — canonical HTTPS URL (optional on Vercel when `VERCEL_PROJECT_PRODUCTION_URL` is available).
 
 Optional (add later, no code changes needed):
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — enables real deposits
@@ -26,12 +27,12 @@ Optional (add later, no code changes needed):
 
 ## One-time setup after each fresh deploy
 
-Visit (or the assistant will call this for you):
+Call the endpoint once after deployment using a POST request and an authorization header. Keep `SETUP_SECRET` in the deployment environment; never put it in a URL:
 
-    https://<your-deployment>.vercel.app/api/setup-webhook?secret=<SETUP_SECRET>
+    curl -X POST https://<your-deployment>.vercel.app/api/setup-webhook \
+      -H "Authorization: Bearer $SETUP_SECRET"
 
-This registers the Telegram webhook to point at `/api/telegram`. Safe to
-re-run any time (e.g. after the deployment URL changes).
+The endpoint fails closed if `SETUP_SECRET` is missing and never trusts the incoming Host header. The Telegram webhook header is derived from `TELEGRAM_BOT_TOKEN`; public health checks do not reveal the webhook URL.
 
 ## Local/Railway path unaffected
 

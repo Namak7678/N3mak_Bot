@@ -4,15 +4,11 @@ const { pool, initDb, creditDeposit } = require('./db');
 const { bot } = require('./bot-instance');
 const { startScheduledPosts } = require('./scheduler');
 const { verifyWebhookEvent } = require('./payments');
+const { deriveTelegramWebhookSecret, hasValidTelegramWebhookSecret } = require('./webhook-security');
 
 const PORT = process.env.PORT || 3000;
-const PUBLIC_URL = process.env.PUBLIC_URL; // e.g. https://n3mak-api-production.up.railway.app
-// A separate, URL-safe secret for the webhook path — the raw bot token
-// contains a ':' which can get inconsistently encoded/decoded between
-// what Telegram registers and what Express actually receives, silently
-// breaking exact-path matching. A plain alphanumeric secret avoids that
-// class of bug entirely.
-const WEBHOOK_SECRET = (process.env.WEBHOOK_SECRET || process.env.TELEGRAM_BOT_TOKEN || '').replace(/[^a-zA-Z0-9]/g, '');
+const PUBLIC_URL = String(process.env.PUBLIC_URL || '').replace(/\/$/, '');
+const WEBHOOK_SECRET = deriveTelegramWebhookSecret(process.env.TELEGRAM_BOT_TOKEN);
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
   console.error('[fatal] TELEGRAM_BOT_TOKEN is not set');
@@ -63,29 +59,33 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
     return res.status(400).send('signature verification failed');
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const telegramId = Number(session.metadata?.telegram_id);
-    const amountUsd = session.amount_total / 100;
-    if (telegramId) {
-      try {
-        await creditDeposit(telegramId, amountUsd, session.id);
-        await bot.telegram.sendMessage(
-          telegramId,
-          `✅ Deposit confirmed: $${amountUsd}. Your wallet has been credited.\nUse /portfolio to check your balance.`
-        );
-      } catch (err) {
-        console.error('[stripe webhook] credit failed:', err.message);
-      }
-    }
+  if (event.type !== 'checkout.session.completed') return res.json({ received: true });
+  const session = event.data.object;
+  if (session.payment_status !== 'paid') return res.json({ received: true, ignored: 'payment_not_paid' });
+  const telegramId = Number(session.metadata?.telegram_id);
+  const amountUsd = Number(session.amount_total) / 100;
+  if (!Number.isSafeInteger(telegramId) || telegramId <= 0 || !session.id || !Number.isFinite(amountUsd) || amountUsd <= 0) {
+    console.error('[stripe webhook] invalid paid checkout session metadata');
+    return res.status(400).json({ received: false, error: 'invalid_checkout_session' });
   }
-  res.json({ received: true });
+  try {
+    await creditDeposit(telegramId, amountUsd, session.id);
+    await bot.telegram.sendMessage(telegramId, `✅ Deposit confirmed: $${amountUsd}. Your wallet has been credited.\nUse /portfolio to check your balance.`);
+  } catch (err) {
+    console.error('[stripe webhook] processing failed:', err.message);
+    return res.status(500).json({ received: false });
+  }
+  return res.json({ received: true });
 });
 
 // Webhook route is mounted before listen() so it's ready even if
 // setWebhook() (a network call to Telegram) hasn't resolved yet.
 if (PUBLIC_URL) {
-  const webhookPath = `/webhook/${WEBHOOK_SECRET}`;
+  const webhookPath = '/webhook';
+  app.use(webhookPath, (req, res, next) => {
+    if (!hasValidTelegramWebhookSecret(req, WEBHOOK_SECRET)) return res.status(401).end();
+    return next();
+  });
   app.use(bot.webhookCallback(webhookPath));
 }
 
@@ -110,8 +110,8 @@ async function connectWithRetry(name, fn, attempt = 1) {
 connectWithRetry('db', initDb);
 
 if (PUBLIC_URL) {
-  const webhookPath = `/webhook/${WEBHOOK_SECRET}`;
-  connectWithRetry('webhook', () => bot.telegram.setWebhook(`${PUBLIC_URL}${webhookPath}`));
+  const webhookPath = '/webhook';
+  connectWithRetry('webhook', () => bot.telegram.setWebhook(`${PUBLIC_URL}${webhookPath}`, { secret_token: WEBHOOK_SECRET }));
 } else {
   bot.launch();
   console.log('[bot] running in polling mode (set PUBLIC_URL to enable webhook mode)');

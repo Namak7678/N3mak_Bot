@@ -11,6 +11,7 @@ function isConfigured() {
 }
 
 function verifyWebhookEvent(rawBody, signature) {
+  if (!stripe) throw new Error('STRIPE_SECRET_KEY not set');
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
     throw new Error('STRIPE_WEBHOOK_SECRET not set');
   }

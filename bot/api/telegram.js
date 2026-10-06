@@ -1,19 +1,25 @@
-// Vercel serverless entry point for Telegram updates (webhook mode only —
-// there is no persistent process here to run long-polling).
-const { bot } = require('../src/bot-instance');
+const { bot, BOT_TOKEN } = require('../src/bot-instance');
 const { ensureDbReady } = require('./_init');
+const { deriveTelegramWebhookSecret, hasValidTelegramWebhookSecret } = require('../src/webhook-security');
+const { acknowledgeWebhook } = require('../src/webhook-response');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
-    res.status(200).send('N3mak bot webhook is running.');
-    return;
+    res.setHeader('Allow', 'POST');
+    return res.status(405).send('Method Not Allowed');
   }
-  try {
-    await ensureDbReady();
-    await bot.handleUpdate(req.body);
-  } catch (err) {
-    console.error('[telegram webhook] error:', err.message);
-  } finally {
-    if (!res.writableEnded) res.status(200).end();
+
+  const expectedSecret = deriveTelegramWebhookSecret(BOT_TOKEN);
+  if (!hasValidTelegramWebhookSecret(req, expectedSecret)) {
+    return res.status(401).json({ error: 'unauthorized' });
   }
+
+  return acknowledgeWebhook(
+    res,
+    async () => {
+      await ensureDbReady();
+      await bot.handleUpdate(req.body);
+    },
+    error => console.error('[telegram webhook] processing failed:', error?.message || 'unknown error'),
+  );
 };

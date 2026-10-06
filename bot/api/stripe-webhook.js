@@ -1,14 +1,13 @@
-// Stripe needs the exact raw request body to verify its signature, so the
-// default Vercel JSON body-parser is disabled for this function only.
 const { verifyWebhookEvent } = require('../src/payments');
 const { creditDeposit } = require('../src/db');
 const { bot } = require('../src/bot-instance');
 const { ensureDbReady } = require('./_init');
+const { acknowledgeWebhook } = require('../src/webhook-response');
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
+    req.on('data', chunk => chunks.push(chunk));
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -16,37 +15,58 @@ function readRawBody(req) {
 
 async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.status(405).end();
-    return;
-  }
-  const rawBody = await readRawBody(req);
-  let event;
-  try {
-    event = verifyWebhookEvent(rawBody, req.headers['stripe-signature']);
-  } catch (err) {
-    console.error('[stripe webhook] signature check failed:', err.message);
-    res.status(400).send('signature verification failed');
-    return;
+    res.setHeader('Allow', 'POST');
+    return res.status(405).end();
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const telegramId = Number(session.metadata?.telegram_id);
-    const amountUsd = session.amount_total / 100;
-    if (telegramId) {
-      try {
-        await ensureDbReady();
-        await creditDeposit(telegramId, amountUsd, session.id);
-        await bot.telegram.sendMessage(
-          telegramId,
-          `✅ Deposit confirmed: $${amountUsd}. Your wallet has been credited.\nUse /portfolio to check your balance.`
-        );
-      } catch (err) {
-        console.error('[stripe webhook] credit failed:', err.message);
-      }
-    }
+  let rawBody;
+  try {
+    rawBody = await readRawBody(req);
+  } catch (error) {
+    console.error('[stripe webhook] body read failed:', error?.message || 'unknown error');
+    return res.status(500).json({ received: false });
   }
-  res.status(200).json({ received: true });
+
+  let event;
+  try {
+    const signature = req.headers['stripe-signature'];
+    if (!signature) {
+      return res.status(400).send('Missing Stripe signature');
+    }
+    event = verifyWebhookEvent(rawBody, Array.isArray(signature) ? signature[0] : signature);
+  } catch (error) {
+    console.error('[stripe webhook] signature check failed:', error?.message || 'unknown error');
+    return res.status(400).send('signature verification failed');
+  }
+
+  if (event.type !== 'checkout.session.completed') {
+    return res.status(200).json({ received: true });
+  }
+
+  const session = event.data.object;
+  if (session.payment_status !== 'paid') {
+    return res.status(200).json({ received: true, ignored: 'payment_not_paid' });
+  }
+
+  const telegramId = Number(session.metadata?.telegram_id);
+  const amountUsd = Number(session.amount_total) / 100;
+  if (!Number.isSafeInteger(telegramId) || telegramId <= 0 || !session.id || !Number.isFinite(amountUsd) || amountUsd <= 0) {
+    console.error('[stripe webhook] invalid paid checkout session metadata');
+    return res.status(400).json({ received: false, error: 'invalid_checkout_session' });
+  }
+
+  return acknowledgeWebhook(
+    res,
+    async () => {
+      await ensureDbReady();
+      await creditDeposit(telegramId, amountUsd, session.id);
+      await bot.telegram.sendMessage(
+        telegramId,
+        `✅ Deposit confirmed: $${amountUsd}. Your wallet has been credited.\nUse /portfolio to check your balance.`,
+      );
+    },
+    error => console.error('[stripe webhook] processing failed:', error?.message || 'unknown error'),
+  );
 }
 
 handler.config = { api: { bodyParser: false } };

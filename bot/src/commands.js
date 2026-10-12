@@ -3,7 +3,31 @@ const { formatMarketSnapshot } = require('./markets');
 const { isConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD } = require('./payments');
 const { chat: llmChat, isEnabled: llmEnabled } = require('./llm');
 
+const PIONEER_URL = 'https://whop.com/checkout/plan_n2uiwphhI5YG7';
+const STARTER_URL = 'https://whop.com/checkout/plan_IkWmnOwW1ShYY';
+const PRO_URL = 'https://whop.com/checkout/plan_SrqGnbkktuOUc';
+
+function buyMessage() {
+  return (
+    `🔥 N3mak AI Gateway\n\n` +
+    `Pioneer — $3:\n${PIONEER_URL}\n\n` +
+    `Starter — $9 (code FIRST9 = $6):\n${STARTER_URL}\n\n` +
+    `Pro — $49:\n${PRO_URL}\n\n` +
+    `التفعيل فوري بعد الدفع على Whop.`
+  );
+}
+
+function shareMessage() {
+  return (
+    `🔥 عرض اليوم — N3mak AI Gateway\n` +
+    `Pioneer $3: ${PIONEER_URL}\n` +
+    `أو Starter بكود FIRST9 = $6\n` +
+    `البوت: @N3mak_bot /buy`
+  );
+}
+
 const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK', '🇷🇺 Russia', '🌍 Africa'];
+
 
 function registerCommands(bot) {
   bot.start(async (ctx) => {
@@ -29,6 +53,7 @@ function registerCommands(bot) {
       `👋 Welcome to N3mak, ${ctx.from.first_name || ''}!\n\n` +
       `🌍💰 Your Smart Global Investment Platform.\n` +
       `Invest across US, Europe, GCC, UK, Russia & Africa — fully online.\n\n` +
+      `Send /buy for Pioneer at $3.\n` +
       `Use /help to see all commands.`
     );
   });
@@ -42,6 +67,8 @@ function registerCommands(bot) {
       `/withdraw - Withdraw your profits or balance\n` +
       `/markets - Browse available global markets\n` +
       `/ask - Ask N3mak AI (OmniRoute → Grok)\n` +
+      `/buy - Buy N3mak AI Gateway\n` +
+      `/share - Copy today's offer\n` +
       `/support - Contact our support team\n` +
       `/referral - Share your invite link & earn rewards\n` +
       `/language - Change bot language`
@@ -140,6 +167,10 @@ function registerCommands(bot) {
       await ctx.reply('AI is temporarily unavailable. Try again later or use /support.');
     }
   });
+
+  bot.command('buy', (ctx) => ctx.reply(buyMessage()));
+
+  bot.command('share', (ctx) => ctx.reply(shareMessage()));
 
   bot.command('support', (ctx) =>
     ctx.reply('🛟 Need help? Our support team will be with you shortly. Please describe your issue.')

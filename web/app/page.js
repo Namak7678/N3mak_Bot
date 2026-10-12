@@ -1,9 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://n3mak-bot-production.up.railway.app';
-const BOT_URL = 'https://t.me/N3MAK_BOT';
-const WHOP_URL = 'https://whop.com/checkout/plan_IkWmnOwW1ShYY';
-const STARTER_URL = 'https://whop.com/checkout/ch_pNxIxDgfV0LCLtZ/';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://n3mak-bot-six.vercel.app';
+const BOT_URL = 'https://t.me/N3mak_bot';
+const PIONEER_URL = 'https://whop.com/checkout/plan_n2uiwphhI5YG7';
 const STARTER_PLAN_URL = 'https://whop.com/checkout/plan_IkWmnOwW1ShYY';
-const PRO_CH_URL = 'https://whop.com/checkout/ch_wr55Q5psUJzFhPq/';
+const PRO_URL = 'https://whop.com/checkout/plan_SrqGnbkktuOUc';
 
 async function getStats() {
   try {
@@ -38,18 +37,21 @@ export default async function Home() {
             أمريكا وأوروبا والخليج وبريطانيا وروسيا وأفريقيا — كله أونلاين، من تيليجرام مباشرة.
           </p>
           <div className="cta-row" style={{display:'flex',gap:'12px',flexWrap:'wrap',justifyContent:'center'}}>
-            <a className="cta" href={STARTER_PLAN_URL} target="_blank" rel="noreferrer" style={{background:'#00C8B4',color:'#0A0E1C'}}>
-              ⚡ ابدأ الآن — $9
+            <a className="cta" href={PIONEER_URL} target="_blank" rel="noreferrer" style={{background:'#F5C451',color:'#1A1203'}}>
+              Pioneer — $3
             </a>
-            <a className="cta" href={PRO_CH_URL} target="_blank" rel="noreferrer">
-              💎 Pro — $49
+            <a className="cta" href={STARTER_PLAN_URL} target="_blank" rel="noreferrer" style={{background:'#00C8B4',color:'#0A0E1C'}}>
+              Starter — $9 · FIRST9=$6
+            </a>
+            <a className="cta" href={PRO_URL} target="_blank" rel="noreferrer">
+              Pro — $49
             </a>
             <a className="cta" href={BOT_URL} target="_blank" rel="noreferrer">
-              ابدأ الآن على تيليجرام ←
+              ابدأ على تيليجرام ←
             </a>
           </div>
-          <p style={{marginTop:12,opacity:0.85}}>دفع فوري عبر Whop · كود <strong>FIRST9</strong> يخصم $3 عن $9 · تفعيل فوري</p>
-          <p style={{marginTop:6,opacity:0.75}}><a href={STARTER_PLAN_URL} target="_blank" rel="noreferrer">Checkout $9</a> · <a href={PRO_CH_URL} target="_blank" rel="noreferrer">Pro $49</a> · <a href={BOT_URL} target="_blank" rel="noreferrer">@N3mak_bot</a></p>
+          <p style={{marginTop:12,opacity:0.85}}>الدفع على Whop · Pioneer $3 للتجربة · كود <strong>FIRST9</strong> يخصم $3 من Starter</p>
+          <p style={{marginTop:6,opacity:0.75}}><a href="/buy.html">صفحة الشراء</a> · <a href={PIONEER_URL} target="_blank" rel="noreferrer">Pioneer $3</a> · <a href={BOT_URL} target="_blank" rel="noreferrer">@N3mak_bot /buy</a></p>
 
           <div className="stats-bar">
             <div className="stat">

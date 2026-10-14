@@ -1,5 +1,6 @@
 const { bot, BOT_TOKEN } = require('../src/bot-instance');
-const { deriveTelegramWebhookSecret, hasValidTelegramWebhookSecret } = require('../src/webhook-security');
+const { activateBot } = require('../src/commands');
+const { deriveTelegramWebhookSecret } = require('../src/webhook-security');
 
 let webhookPromise = null;
 
@@ -26,10 +27,18 @@ async function ensureWebhook() {
   if (!webhookPromise) {
     webhookPromise = (async () => {
       await bot.telegram.setWebhook(url, { secret_token: secretToken });
+      let commands = false;
+      try {
+        await activateBot(bot);
+        commands = true;
+      } catch (error) {
+        console.error('[health] command menu failed:', error?.message || 'unknown error');
+      }
       const info = await bot.telegram.getWebhookInfo();
       return {
         configured: info.url === url,
         pendingUpdateCount: info.pending_update_count ?? 0,
+        commands,
       };
     })().catch(error => {
       webhookPromise = null;

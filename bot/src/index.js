@@ -19,9 +19,13 @@ startScheduledPosts(bot);
 
 const app = express();
 
+// CORS: only explicit allowlisted origins (comma-separated BOT_CORS_ORIGINS). No wildcard.
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    res.header('Access-Control-Allow-Origin', '*');
+  const allowed = (process.env.BOT_CORS_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+  const origin = req.headers.origin;
+  if (origin && allowed.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
   }
   next();
 });
@@ -29,7 +33,12 @@ app.use((req, res, next) => {
 app.get('/', (_req, res) => res.send('N3mak bot server is running.'));
 app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 
-app.get('/api/stats', async (_req, res) => {
+// /api/stats exposes user counts: require x-stats-token matching STATS_TOKEN (closed by default).
+app.get('/api/stats', async (req, res) => {
+  const expected = process.env.STATS_TOKEN;
+  if (!expected || req.headers['x-stats-token'] !== expected) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
   try {
     const usersResult = await require('./db').pool.query('SELECT COUNT(*)::int AS count FROM users');
     res.status(200).json({ users: usersResult.rows[0].count, markets: 6 });

@@ -17,6 +17,48 @@ function buyMessage() {
   );
 }
 
+function buyKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '🛒 Pioneer — $3', url: PIONEER_URL }],
+      [{ text: 'Starter — $9 · FIRST9 = $6', url: STARTER_URL }],
+      [{ text: 'Pro — $49', url: PRO_URL }],
+    ],
+  };
+}
+
+function menuKeyboard() {
+  return {
+    keyboard: [[{ text: '🛒 شراء' }, { text: '📤 مشاركة العرض' }]],
+    resize_keyboard: true,
+    is_persistent: true,
+  };
+}
+
+const BOT_COMMANDS = [
+  { command: 'start', description: 'ابدأ وفعّل الحساب' },
+  { command: 'buy', description: 'أزرار الشراء — من $3' },
+  { command: 'share', description: 'نسخ عرض اليوم' },
+  { command: 'help', description: 'كل الأوامر' },
+  { command: 'portfolio', description: 'رصيد المحفظة' },
+  { command: 'markets', description: 'الأسواق' },
+  { command: 'ask', description: 'اسأل N3mak' },
+  { command: 'support', description: 'الدعم' },
+  { command: 'referral', description: 'رابط الدعوة' },
+];
+
+async function activateBot(bot) {
+  await bot.telegram.setMyCommands(BOT_COMMANDS);
+  await bot.telegram.callApi('setChatMenuButton', {
+    menu_button: { type: 'commands' },
+  });
+  return true;
+}
+
+function replyBuy(ctx) {
+  return ctx.reply(buyMessage(), { reply_markup: buyKeyboard() });
+}
+
 function shareMessage() {
   return (
     `🔥 عرض اليوم — N3mak AI Gateway\n` +
@@ -25,6 +67,7 @@ function shareMessage() {
     `البوت: @N3mak_bot /buy`
   );
 }
+
 
 const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK', '🇷🇺 Russia', '🌍 Africa'];
 
@@ -50,28 +93,19 @@ function registerCommands(bot) {
     }
 
     await ctx.reply(
-      `👋 Welcome to N3mak, ${ctx.from.first_name || ''}!\n\n` +
-      `🌍💰 Your Smart Global Investment Platform.\n` +
-      `Invest across US, Europe, GCC, UK, Russia & Africa — fully online.\n\n` +
-      `Send /buy for Pioneer at $3.\n` +
-      `Use /help to see all commands.`
+      `👋 أهلاً ${ctx.from.first_name || ''} في N3mak.\n` +
+      `الأزرار تحت تفتح الدفع مباشرة. التفعيل فوري بعد Whop.`,
+      { reply_markup: menuKeyboard() }
     );
+    await replyBuy(ctx);
   });
 
   bot.help((ctx) =>
     ctx.reply(
-      `📋 Available commands:\n\n` +
-      `/invest - Explore investment opportunities\n` +
-      `/portfolio - View your current portfolio\n` +
-      `/deposit - Add funds in your preferred currency\n` +
-      `/withdraw - Withdraw your profits or balance\n` +
-      `/markets - Browse available global markets\n` +
-      `/ask - Ask N3mak AI (OmniRoute → Grok)\n` +
-      `/buy - Buy N3mak AI Gateway\n` +
-      `/share - Copy today's offer\n` +
-      `/support - Contact our support team\n` +
-      `/referral - Share your invite link & earn rewards\n` +
-      `/language - Change bot language`
+      `📋 الأوامر:\n` +
+      `/buy شراء  ·  /share نشر العرض  ·  /portfolio الرصيد\n` +
+      `/markets الأسواق  ·  /ask اسأل  ·  /support الدعم`,
+      { reply_markup: buyKeyboard() }
     )
   );
 
@@ -168,9 +202,11 @@ function registerCommands(bot) {
     }
   });
 
-  bot.command('buy', (ctx) => ctx.reply(buyMessage()));
+  bot.command('buy', (ctx) => replyBuy(ctx));
+  bot.hears(['🛒 شراء', 'شراء'], (ctx) => replyBuy(ctx));
 
   bot.command('share', (ctx) => ctx.reply(shareMessage()));
+  bot.hears('📤 مشاركة العرض', (ctx) => ctx.reply(shareMessage()));
 
   bot.command('support', (ctx) =>
     ctx.reply('🛟 Need help? Our support team will be with you shortly. Please describe your issue.')
@@ -222,4 +258,4 @@ function registerCommands(bot) {
   });
 }
 
-module.exports = { registerCommands };
+module.exports = { registerCommands, activateBot };

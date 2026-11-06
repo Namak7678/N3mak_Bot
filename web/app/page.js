@@ -28,6 +28,8 @@ export default function HomePage() {
           </p>
           <a href={BOT} style={btn('#1E293B','#fff',true)}>تيليجرام @N3mak_bot</a>
           <p style={{textAlign:'center',marginTop:18}}>
+            <a href="/playground" style={{color:'#93C5FD'}}>جرّب النموذج · Playground</a>
+            {' · '}
             <a href="/docs" style={{color:'#93C5FD'}}>توثيق API · API docs</a>
           </p>
         </div>

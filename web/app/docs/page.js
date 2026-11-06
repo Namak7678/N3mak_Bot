@@ -1,6 +1,7 @@
 import DocsClient from './DocsClient';
 
 const DEFAULT_BASE_URL = 'https://n3mak-gateway.n3mak.workers.dev/v1';
+// deploy-trigger: ensure Ignored Build Step sees a web/ change
 
 export const metadata = {
   title: 'N3mak API docs — توثيق الواجهة',

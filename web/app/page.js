@@ -1,119 +1,52 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://n3mak-bot-six.vercel.app';
-const BOT_URL = 'https://t.me/N3mak_bot';
-const PIONEER_URL = 'https://whop.com/checkout/plan_n2uiwphhI5YG7';
-const STARTER_PLAN_URL = 'https://whop.com/checkout/plan_IkWmnOwW1ShYY';
-const PRO_URL = 'https://whop.com/checkout/plan_SrqGnbkktuOUc';
+const PIONEER = 'https://whop.com/checkout/plan_n2uiwphhI5YG7';
+const STARTER = 'https://whop.com/checkout/plan_IkWmnOwW1ShYY';
+const PRO = 'https://whop.com/checkout/plan_SrqGnbkktuOUc';
+const BOT = 'https://t.me/N3mak_bot';
 
-async function getStats() {
-  try {
-    const res = await fetch(`${API_URL}/api/stats`, { next: { revalidate: 30 } });
-    if (!res.ok) throw new Error('bad response');
-    return await res.json();
-  } catch {
-    return { users: 0, markets: 6 };
-  }
+export const metadata = {
+  title: 'N3mak AI Gateway — Pioneer $3',
+  description: 'Multi-model AI gateway via OmniRoute. Instant Telegram key after Whop checkout.',
+};
+
+export default function HomePage() {
+  return (
+    <main style={{margin:0,fontFamily:'system-ui,sans-serif',background:'#0B1220',color:'#fff',minHeight:'100vh'}}>
+      <div style={{maxWidth:720,margin:'0 auto',padding:'48px 20px'}}>
+        <div style={{background:'#0F1B2D',border:'2px solid #F5C451',borderRadius:20,padding:32}}>
+          <h1 style={{fontSize:'2rem',margin:'0 0 12px'}}>N3mak AI Gateway</h1>
+          <p style={{color:'#CBD5E1',lineHeight:1.6}}>
+            بوابة نماذج AI متعددة عبر OmniRoute — تسليم مفتاح فوري على تيليجرام بعد الدفع على Whop.
+          </p>
+          <div style={{display:'inline-block',background:'#F5C451',color:'#1A1203',fontWeight:800,fontSize:'1.6rem',padding:'8px 18px',borderRadius:12,margin:'16px 0'}}>
+            Pioneer $3
+          </div>
+          <a href={PIONEER} style={btn('#F5C451','#1A1203')}>اشترِ Pioneer — $3</a>
+          <a href={STARTER} style={btn('#00C8B4','#0A0E1C')}>Starter — $9 · FIRST9=$6</a>
+          <a href={PRO} style={btn('#1E293B','#fff',true)}>Pro — $49</a>
+          <p style={{color:'#CBD5E1',opacity:0.85}}>
+            Promo <b>FIRST9</b> — $3 off Starter · Bot <a href={BOT} style={{color:'#93C5FD'}}>@N3mak_bot</a> → /buy
+          </p>
+          <a href={BOT} style={btn('#1E293B','#fff',true)}>تيليجرام @N3mak_bot</a>
+          <p style={{marginTop:24,opacity:0.7}}>
+            <a href="/feed" style={{color:'#94A3B8'}}>سوق الموارد</a>
+          </p>
+        </div>
+      </div>
+    </main>
+  );
 }
 
-const FEATURES = [
-  { icon: '🧠', title: 'تحليل ذكي', desc: 'تقييم فوري لقيمة المورد وأفضل سعر عادل له باستخدام الذكاء الاصطناعي.' },
-  { icon: '🤝', title: 'مفاوض آلي', desc: 'وكيل ذكاء اصطناعي يتفاوض نيابة عنك مع المهتمين للوصول لأفضل صفقة.' },
-  { icon: '🔮', title: 'توقيت البيع', desc: 'توقع الوقت الأنسب لعرض موردك بناءً على الطلب الفعلي في السوق.' },
-  { icon: '⏳', title: 'بنك الوقت', desc: 'بادل وقتك ومهاراتك مباشرة مع غيرك، من غير ما تحتاج فلوس تتحرك.' },
-  { icon: '🛡️', title: 'ضمان المعاملة', desc: 'حماية طرفي الصفقة لحد ما يتسلم كل واحد حقه بالكامل.' },
-  { icon: '💬', title: 'كل حاجة من تيليجرام', desc: 'اعرض، فاوض، وتابع صفقاتك من نفس البوت — من غير تطبيقات إضافية.' },
-];
-
-export default async function Home() {
-  const stats = await getStats();
-
-  return (
-    <>
-      <section className="hero">
-        <div className="wrap">
-          <span className="eyebrow">N3MAK — منصة واحدة، بابين</span>
-          <h1>حوّل مواردك الخاملة إلى دخل، واستثمر في أسواق العالم</h1>
-          <p className="lead">
-            سوق موارد ذكي يقيّم ويفاوض عنك بالذكاء الاصطناعي، وبوابة استثمار تغطي
-            أمريكا وأوروبا والخليج وبريطانيا وروسيا وأفريقيا — كله أونلاين، من تيليجرام مباشرة.
-          </p>
-          <div className="cta-row" style={{display:'flex',gap:'12px',flexWrap:'wrap',justifyContent:'center'}}>
-            <a className="cta" href={PIONEER_URL} target="_blank" rel="noreferrer" style={{background:'#F5C451',color:'#1A1203'}}>
-              Pioneer — $3
-            </a>
-            <a className="cta" href={STARTER_PLAN_URL} target="_blank" rel="noreferrer" style={{background:'#00C8B4',color:'#0A0E1C'}}>
-              Starter — $9 · FIRST9=$6
-            </a>
-            <a className="cta" href={PRO_URL} target="_blank" rel="noreferrer">
-              Pro — $49
-            </a>
-            <a className="cta" href={BOT_URL} target="_blank" rel="noreferrer">
-              ابدأ على تيليجرام ←
-            </a>
-          </div>
-          <p style={{marginTop:12,opacity:0.85}}>الدفع على Whop · Pioneer $3 للتجربة · كود <strong>FIRST9</strong> يخصم $3 من Starter</p>
-          <p style={{marginTop:6,opacity:0.75}}><a href="/buy.html">صفحة الشراء</a> · <a href={PIONEER_URL} target="_blank" rel="noreferrer">Pioneer $3</a> · <a href={BOT_URL} target="_blank" rel="noreferrer">@N3mak_bot /buy</a></p>
-
-          <div className="stats-bar">
-            <div className="stat">
-              <span className="num">{stats.users}</span>
-              <span className="label">مستخدم مسجل فعليًا</span>
-            </div>
-            <div className="stat">
-              <span className="num">{stats.markets}</span>
-              <span className="label">أسواق استثمارية مفتوحة</span>
-            </div>
-            <div className="stat">
-              <span className="num">24/7</span>
-              <span className="label">تشغيل بلا توقف</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="wrap">
-          <h2>خدمتان، منطق واحد</h2>
-          <p className="sub">مش لازم تختار — المنصة مبنية على إن قيمتك المالية جوة موردك وجوة استثمارك مع بعض.</p>
-          <div className="services">
-            <div className="service-card marketplace">
-              <h3>🛍️ سوق الموارد الذكي</h3>
-              <p>
-                عندك معدة، وقت، مساحة، أو مهارة مش مستغلة؟ الذكاء الاصطناعي بيقيّمها،
-                بيلاقيلها مشتري أو مستأجر مناسب، وبيتفاوض نيابة عنك لحد ما توصل لأفضل سعر.
-              </p>
-            </div>
-            <div className="service-card invest">
-              <h3>💰 منصة الاستثمار العالمي</h3>
-              <p>
-                حوّل نفس القيمة دي لاستثمار حقيقي في أسواق عالمية متعددة، بعملات مختلفة
-                (USD, AED وغيرها)، وتابع محفظتك من نفس مكان واحد.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="section" style={{ background: 'rgba(255,255,255,0.02)' }}>
-        <div className="wrap">
-          <h2>إمكانيات سوق الموارد</h2>
-          <p className="sub">كل ميزة هنا بتتفعّل تدريجيًا مع نمو المنصة — وده اللي شغال فعليًا دلوقتي وجاري تطويره.</p>
-          <div className="grid">
-            {FEATURES.map((f) => (
-              <div className="card" key={f.title}>
-                <span className="icon">{f.icon}</span>
-                <h3>{f.title}</h3>
-                <p>{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <footer>
-        <div className="wrap">
-          N3mak © {new Date().getFullYear()} — تواصل عبر <a href={BOT_URL}>@N3MAK_BOT</a>
-        </div>
-      </footer>
-    </>
-  );
+function btn(bg, color, border) {
+  return {
+    display: 'block',
+    textAlign: 'center',
+    background: bg,
+    color,
+    textDecoration: 'none',
+    fontWeight: 700,
+    padding: 16,
+    borderRadius: 12,
+    margin: '10px 0',
+    border: border ? '1px solid #64748B' : undefined,
+  };
 }

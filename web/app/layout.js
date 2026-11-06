@@ -1,16 +1,14 @@
 import './globals.css';
-import Navbar from './Navbar';
 
 export const metadata = {
-  title: 'N3mak — سوق الموارد الذكي والاستثمار العالمي',
-  description: 'حوّل مواردك غير المستغلة إلى فرص، واستثمر في أسواق عالمية — كله بذكاء اصطناعي وأونلاين بالكامل.',
+  title: 'N3mak AI Gateway — Pioneer $3',
+  description: 'Multi-model AI gateway via OmniRoute. Instant Telegram key after Whop checkout.',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="ar" dir="rtl">
-      <body style={{ margin: 0, fontFamily: 'Tahoma, Arial, sans-serif', background: '#0B1F3A', color: '#fff' }}>
-        <Navbar />
+      <body style={{ margin: 0, fontFamily: 'system-ui, Tahoma, Arial, sans-serif', background: '#0B1220', color: '#fff' }}>
         {children}
       </body>
     </html>

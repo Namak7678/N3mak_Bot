@@ -14,6 +14,8 @@ database_id = "c7413fc7-7cc4-4886-adf8-b746121a980f"
 [vars]
 OWNER_TELEGRAM_ID = "320423744"
 PUBLIC_BASE_URL = "https://n3mak-gateway.n3mak.workers.dev/v1"
+TRIAL_GLOBAL_RPD = "1500"
+DEMO_GLOBAL_RPD = "300"
 
 # Secrets (set with `wrangler secret put` or the Cloudflare dashboard; never commit):
 #   ADMIN_TOKEN, TELEGRAM_BOT_TOKEN, WHOP_WEBHOOK_SECRET

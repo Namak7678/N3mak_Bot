@@ -5,6 +5,7 @@ const { pool, initDb, creditDeposit } = require('./db');
 const { checkRateLimit } = require('./redis');
 const { registerCommands } = require('./commands');
 const { startScheduledPosts } = require('./scheduler');
+const { startTrialNudges } = require('./trial/nudge');
 const { verifyWebhookEvent } = require('./payments');
 const starsPayments = require('./starsPayments');
 
@@ -117,6 +118,7 @@ bot.on('successful_payment', async (ctx) => {
 });
 
 startScheduledPosts(bot);
+startTrialNudges(bot);
 
 const app = express();
 app.use(express.static(require('path').join(__dirname, '..', 'public')));
@@ -286,6 +288,26 @@ if (PUBLIC_URL) {
   bot.launch();
   console.log('[bot] running in polling mode (set PUBLIC_URL to enable webhook mode)');
 }
+
+
+async function syncBotCommands() {
+  try {
+    await bot.telegram.setMyCommands([
+      { command: 'start', description: 'القائمة الرئيسية / Main menu' },
+      { command: 'trial', description: 'تجربة مجانية 24 ساعة / Free trial' },
+      { command: 'buy', description: 'شراء Pioneer/Starter/Pro' },
+      { command: 'ask', description: 'اسأل N3mak' },
+      { command: 'deposit', description: 'شحن المحفظة' },
+      { command: 'portfolio', description: 'الرصيد' },
+      { command: 'help', description: 'الأوامر' },
+      { command: 'support', description: 'الدعم' },
+    ]);
+    console.log('[bot] setMyCommands ok');
+  } catch (err) {
+    console.warn('[bot] setMyCommands failed:', err.message);
+  }
+}
+syncBotCommands();
 
 process.once('uncaughtException', (err) => console.error('[uncaughtException]', err));
 process.once('unhandledRejection', (err) => console.error('[unhandledRejection]', err));

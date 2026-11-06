@@ -5,13 +5,17 @@
  * Routes:
  *   GET  /v1/models                 (Bearer buyer key)
  *   POST /v1/chat/completions       (Bearer buyer key; non-stream + simple SSE stream)
+ *   POST /v1/demo/chat              (anonymous, CORS-limited, gpt-oss-20b, rate-limited)
  *   POST /webhooks/whop             (Standard Webhooks HMAC-SHA256, WHOP_WEBHOOK_SECRET)
- *   POST /admin/mint                (Bearer ADMIN_TOKEN)
+ *   POST /admin/mint                (Bearer ADMIN_TOKEN) — paid plans + trial
  *   POST /admin/revoke              (Bearer ADMIN_TOKEN)
+ *   GET  /admin/trials/nudge-pending (Bearer ADMIN_TOKEN)
+ *   POST /admin/trials/nudge-mark   (Bearer ADMIN_TOKEN)
  *   GET  /health
  *
- * Bindings: AI (Workers AI), DB (D1). Secrets: ADMIN_TOKEN, WHOP_WEBHOOK_SECRET, TELEGRAM_BOT_TOKEN.
- * Vars: OWNER_TELEGRAM_ID, PUBLIC_BASE_URL.
+ * Bindings: AI (Workers AI), DB (D1).
+ * Secrets: ADMIN_TOKEN, WHOP_WEBHOOK_SECRET, TELEGRAM_BOT_TOKEN.
+ * Vars: OWNER_TELEGRAM_ID, PUBLIC_BASE_URL, TRIAL_GLOBAL_RPD, DEMO_GLOBAL_RPD.
  */
 
 const PLAN_IDS = {
@@ -20,7 +24,8 @@ const PLAN_IDS = {
   plan_SrqGnbkktuOUc: 'pro',
 };
 
-// Public model id -> Workers AI model
+const PIONEER_CHECKOUT = 'https://whop.com/checkout/plan_n2uiwphhI5YG7';
+
 const MODELS = {
   'gpt-oss-20b': '@cf/openai/gpt-oss-20b',
   'llama-3.1-8b': '@cf/meta/llama-3.1-8b-instruct-fp8',
@@ -34,12 +39,21 @@ const DEFAULT_MODEL = 'gpt-oss-20b';
 const PIONEER_MODELS = ['gpt-oss-20b', 'llama-3.1-8b'];
 const STARTER_MODELS = [...PIONEER_MODELS, 'gpt-oss-120b', 'mistral-small-3.1-24b', 'qwen2.5-coder-32b'];
 
-// Limits from marketing/tier-proposal.md
 const TIERS = {
+  trial: { label: 'Free trial', rpd: 20, rpm: 5, models: ['gpt-oss-20b'], maxTokens: 1024, ttlHours: 24 },
   pioneer: { label: 'Pioneer $3', rpd: 200, rpm: 5, models: PIONEER_MODELS, maxTokens: 1024 },
   starter: { label: 'Starter $9', rpd: 1000, rpm: 20, models: STARTER_MODELS, maxTokens: 4096 },
   pro: { label: 'Pro $49', rpd: 10000, rpm: 60, models: Object.keys(MODELS), maxTokens: 8192 },
 };
+
+const DEMO_SYSTEM =
+  'You are N3mak demo. Answer in at most 3 short sentences. Be helpful and concrete. Prefer Arabic if the user writes Arabic.';
+
+const ALLOWED_DEMO_ORIGINS = new Set([
+  'https://n3mak-buy.vercel.app',
+  'https://n3mak-web.vercel.app',
+  'https://n3mak.vercel.app',
+]);
 
 const enc = new TextEncoder();
 
@@ -74,7 +88,6 @@ function bearer(req) {
   return m ? m[1].trim() : '';
 }
 
-/** Normalize "cfp/openai/gpt-oss-20b", "@cf/openai/gpt-oss-20b", "openai/gpt-oss-20b", "gpt-oss-20b" -> public id */
 function resolveModel(input) {
   let m = String(input || DEFAULT_MODEL).trim();
   m = m.replace(/^cfp\//, '').replace(/^@cf\//, '').replace(/^n3mak\//, '');
@@ -87,19 +100,81 @@ function resolveModel(input) {
   return null;
 }
 
+function trialGlobalCap(env) {
+  const n = Number(env.TRIAL_GLOBAL_RPD);
+  return Number.isFinite(n) && n > 0 ? n : 1500;
+}
+function demoGlobalCap(env) {
+  const n = Number(env.DEMO_GLOBAL_RPD);
+  return Number.isFinite(n) && n > 0 ? n : 300;
+}
+
+function isExpired(row) {
+  if (!row || !row.expires_at) return false;
+  return Date.parse(row.expires_at) <= Date.now();
+}
+
+function corsOriginAllowed(origin) {
+  if (!origin) return true; // curl / server-to-server
+  if (ALLOWED_DEMO_ORIGINS.has(origin)) return true;
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname;
+    if (host === 'netlify.app' || host.endsWith('.netlify.app')) return true;
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+function corsHeaders(origin) {
+  const h = {
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'access-control-allow-headers': 'authorization,content-type',
+    'access-control-max-age': '86400',
+  };
+  if (!origin) {
+    h['access-control-allow-origin'] = '*';
+  } else if (corsOriginAllowed(origin)) {
+    h['access-control-allow-origin'] = origin;
+    h['vary'] = 'Origin';
+  }
+  return h;
+}
+
 // ---------- keys ----------
-async function mintKey(env, { plan, membershipId = null, telegramId = null, label = null }) {
+async function mintKey(env, { plan, membershipId = null, telegramId = null, label = null, storePlain = false }) {
   const tier = TIERS[plan];
   if (!tier) throw new Error('unknown plan');
   const key = 'n3k_' + randHex(24);
   const id = 'key_' + randHex(8);
   const hash = await sha256Hex(key);
+  const created = new Date();
+  const expiresAt = tier.ttlHours ? new Date(created.getTime() + tier.ttlHours * 3600 * 1000).toISOString() : null;
   await env.DB.prepare(
-    'INSERT INTO api_keys (id, key_hash, key_prefix, plan, membership_id, telegram_id, label, created_at) VALUES (?,?,?,?,?,?,?,?)'
+    'INSERT INTO api_keys (id, key_hash, key_prefix, plan, membership_id, telegram_id, label, created_at, expires_at, key_plain) VALUES (?,?,?,?,?,?,?,?,?,?)'
   )
-    .bind(id, hash, key.slice(0, 10), plan, membershipId, telegramId ? String(telegramId) : null, label, new Date().toISOString())
+    .bind(
+      id,
+      hash,
+      key.slice(0, 10),
+      plan,
+      membershipId,
+      telegramId ? String(telegramId) : null,
+      label,
+      created.toISOString(),
+      expiresAt,
+      storePlain ? key : null
+    )
     .run();
-  return { key, id, plan, limits: { rpd: tier.rpd, rpm: tier.rpm, models: tier.models } };
+  return {
+    key,
+    id,
+    plan,
+    expires_at: expiresAt,
+    limits: { rpd: tier.rpd, rpm: tier.rpm, models: tier.models },
+  };
 }
 
 async function lookupKey(env, key) {
@@ -109,7 +184,6 @@ async function lookupKey(env, key) {
   return row || null;
 }
 
-/** Atomic counter increment in D1; returns new count. */
 async function bump(env, k, ttlSec) {
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
@@ -120,20 +194,52 @@ async function bump(env, k, ttlSec) {
   return row ? row.n : 1;
 }
 
+async function peek(env, k) {
+  const row = await env.DB.prepare('SELECT n FROM usage_counters WHERE k = ?').bind(k).first();
+  return row ? Number(row.n) : 0;
+}
+
 async function enforceLimits(env, row, ctx) {
   const tier = TIERS[row.plan] || TIERS.pioneer;
   const now = new Date();
   const minute = Math.floor(now.getTime() / 60000);
   const day = now.toISOString().slice(0, 10);
+
+  if (row.plan === 'trial') {
+    const g = await bump(env, `trialg:${day}`, 172800);
+    if (g > trialGlobalCap(env)) {
+      return {
+        status: 429,
+        msg: 'trial capacity reached, get Pioneer $3',
+        code: 'trial_capacity_reached',
+        retry: 3600,
+        upgrade: true,
+      };
+    }
+  }
+
   const rpm = await bump(env, `m:${row.id}:${minute}`, 120);
   if (rpm > tier.rpm) {
     return { status: 429, msg: `Rate limit: ${tier.rpm} requests/minute on ${tier.label}`, retry: 60 - now.getUTCSeconds() };
   }
   const rpd = await bump(env, `d:${row.id}:${day}`, 172800);
   if (rpd > tier.rpd) {
-    return { status: 429, msg: `Daily limit: ${tier.rpd} requests/day on ${tier.label}`, retry: 3600 };
+    if (row.plan === 'trial' && !row.limit_hit_at) {
+      try {
+        await env.DB.prepare('UPDATE api_keys SET limit_hit_at = ? WHERE id = ? AND limit_hit_at IS NULL')
+          .bind(now.toISOString(), row.id)
+          .run();
+      } catch (_) {}
+    }
+    return {
+      status: 429,
+      msg: row.plan === 'trial'
+        ? `Daily trial limit (${tier.rpd}/day) reached. Upgrade: ${PIONEER_CHECKOUT}`
+        : `Daily limit: ${tier.rpd} requests/day on ${tier.label}`,
+      retry: 3600,
+      upgrade: row.plan === 'trial',
+    };
   }
-  // opportunistic cleanup of expired counters
   if (Math.random() < 0.02 && ctx) {
     ctx.waitUntil(env.DB.prepare('DELETE FROM usage_counters WHERE expires_at < ?').bind(Math.floor(Date.now() / 1000)).run());
   }
@@ -174,7 +280,6 @@ async function runChat(env, modelId, body, tier) {
   if (typeof body.temperature === 'number') input.temperature = body.temperature;
   if (typeof body.top_p === 'number') input.top_p = body.top_p;
   if (cfModel.includes('gpt-oss')) {
-    // gpt-oss uses Responses-style input on Workers AI
     const sys = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
     const rest = messages.filter((m) => m.role !== 'system');
     const req = { input: rest, max_output_tokens: maxTokens, reasoning: { effort: 'low' } };
@@ -204,7 +309,17 @@ async function handleChat(req, env, ctx, row) {
     return oaiError(403, `Model ${modelId} is not included in ${tier.label}. Allowed: ${tier.models.join(', ')}`, 'permission_error', 'model_not_allowed');
   }
   const lim = await enforceLimits(env, row, ctx);
-  if (lim) return json({ error: { message: lim.msg, type: 'rate_limit_error', code: 'rate_limit_exceeded' } }, 429, { 'retry-after': String(lim.retry) });
+  if (lim) {
+    const payload = {
+      error: {
+        message: lim.msg,
+        type: 'rate_limit_error',
+        code: lim.code || 'rate_limit_exceeded',
+      },
+    };
+    if (lim.upgrade) payload.upgrade_url = PIONEER_CHECKOUT;
+    return json(payload, 429, { 'retry-after': String(lim.retry) });
+  }
 
   let result;
   try {
@@ -238,7 +353,87 @@ async function handleChat(req, env, ctx, row) {
   });
 }
 
-// ---------- Whop webhook (Standard Webhooks) ----------
+// ---------- Demo (anonymous) ----------
+async function handleDemoChat(req, env, ctx) {
+  const origin = req.headers.get('origin');
+  if (origin && !corsOriginAllowed(origin)) {
+    return json({ error: 'origin not allowed', upgrade_url: PIONEER_CHECKOUT }, 403, corsHeaders(origin));
+  }
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders(origin) });
+  }
+  if (req.method !== 'POST') {
+    return json({ error: 'method not allowed' }, 405, corsHeaders(origin));
+  }
+
+  let body;
+  try {
+    body = await req.json();
+  } catch (_) {
+    return json({ error: 'invalid JSON' }, 400, corsHeaders(origin));
+  }
+  const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+  if (!prompt) return json({ error: 'prompt is required' }, 400, corsHeaders(origin));
+  if (prompt.length > 500) return json({ error: 'prompt must be at most 500 characters' }, 400, corsHeaders(origin));
+
+  const ip = (req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'unknown').split(',')[0].trim() || 'unknown';
+  const now = new Date();
+  const minute = Math.floor(now.getTime() / 60000);
+  const day = now.toISOString().slice(0, 10);
+
+  const ipMin = await bump(env, `demo:m:${ip}:${minute}`, 120);
+  if (ipMin > 1) {
+    return json(
+      { error: 'demo rate limit: 1 request/minute', upgrade_url: PIONEER_CHECKOUT },
+      429,
+      { ...corsHeaders(origin), 'retry-after': String(60 - now.getUTCSeconds()) }
+    );
+  }
+  const ipDay = await bump(env, `demo:d:${ip}:${day}`, 172800);
+  if (ipDay > 3) {
+    return json(
+      { error: 'demo daily limit: 3 requests/day per IP', upgrade_url: PIONEER_CHECKOUT },
+      429,
+      { ...corsHeaders(origin), 'retry-after': '3600' }
+    );
+  }
+  const gDay = await bump(env, `demo:g:${day}`, 172800);
+  const gCap = demoGlobalCap(env);
+  if (gDay > gCap) {
+    return json(
+      { error: 'demo capacity reached for today', upgrade_url: PIONEER_CHECKOUT },
+      429,
+      { ...corsHeaders(origin), 'retry-after': '3600' }
+    );
+  }
+
+  let result;
+  try {
+    result = await runChat(
+      env,
+      'gpt-oss-20b',
+      {
+        messages: [
+          { role: 'system', content: DEMO_SYSTEM },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 256,
+      },
+      { maxTokens: 256 }
+    );
+  } catch (e) {
+    return json({ error: 'upstream model error' }, 502, corsHeaders(origin));
+  }
+
+  const remaining = Math.max(0, 3 - ipDay);
+  return json(
+    { reply: result.text || '', model: 'gpt-oss-20b', remaining },
+    200,
+    corsHeaders(origin)
+  );
+}
+
+// ---------- Whop webhook ----------
 const TOLERANCE_SEC = 5 * 60;
 async function verifyWhop(raw, headers, secret) {
   if (!secret || !String(secret).trim()) return 'WHOP_SECRET_MISSING';
@@ -290,7 +485,6 @@ function deliveryText({ key, plan, membershipId, base, test }) {
 }
 
 async function fulfill(env, req, { plan, membershipId, telegramId, email, webhookId, event, test }) {
-  // dedupe per membership
   if (membershipId) {
     const ins = await env.DB.prepare(
       'INSERT OR IGNORE INTO fulfillments (membership_id, plan_id, webhook_id, event, created_at) VALUES (?,?,?,?,?)'
@@ -363,10 +557,67 @@ function isAdmin(req, env) {
   return !!env.ADMIN_TOKEN && timingSafeEqualStr(t, env.ADMIN_TOKEN);
 }
 
+async function mintTrial(env, req, b) {
+  const telegramId = b.telegram_id != null ? String(b.telegram_id) : null;
+  if (!telegramId) return json({ ok: false, error: 'telegram_id required for trial' }, 400);
+
+  const existing = await env.DB.prepare(
+    "SELECT * FROM api_keys WHERE plan = 'trial' AND telegram_id = ? ORDER BY created_at DESC LIMIT 1"
+  )
+    .bind(telegramId)
+    .first();
+
+  if (existing) {
+    const expired = isExpired(existing) || !!existing.revoked_at;
+    if (!expired) {
+      return json({
+        ok: true,
+        already: true,
+        key: existing.key_plain || null,
+        id: existing.id,
+        plan: 'trial',
+        expires_at: existing.expires_at,
+        base_url: baseUrl(env, req),
+        limits: { rpd: TIERS.trial.rpd, rpm: TIERS.trial.rpm, models: TIERS.trial.models },
+        message: existing.key_plain
+          ? 'existing active trial key returned'
+          : 'active trial exists but plaintext unavailable — use the key from the earlier DM',
+      });
+    }
+    return json(
+      {
+        ok: false,
+        error: 'trial_already_used',
+        message: 'Free trial already used. Get Pioneer $3.',
+        upgrade_url: PIONEER_CHECKOUT,
+        expired_at: existing.expires_at,
+        key_id: existing.id,
+      },
+      409
+    );
+  }
+
+  const label = b.label || (b.test ? 'TEST trial' : 'trial');
+  const minted = await mintKey(env, {
+    plan: 'trial',
+    membershipId: null,
+    telegramId,
+    label,
+    storePlain: true,
+  });
+  return json({
+    ok: true,
+    already: false,
+    ...minted,
+    base_url: baseUrl(env, req),
+  });
+}
+
 async function handleAdminMint(req, env) {
   const b = await req.json().catch(() => ({}));
-  const plan = PLAN_IDS[b.plan] || String(b.plan || 'pioneer').toLowerCase();
-  if (!TIERS[plan]) return json({ ok: false, error: 'plan must be pioneer|starter|pro' }, 400);
+  let plan = PLAN_IDS[b.plan] || String(b.plan || 'pioneer').toLowerCase();
+  if (plan === 'trial') return mintTrial(env, req, b);
+  if (!TIERS[plan] || plan === 'trial') return json({ ok: false, error: 'plan must be pioneer|starter|pro|trial' }, 400);
   const test = !!b.test || String(b.membership_id || '').startsWith('test-');
   if (b.notify === false) {
     if (b.membership_id) {
@@ -395,15 +646,93 @@ async function handleAdminRevoke(req, env) {
   if (b.key) res = await env.DB.prepare('UPDATE api_keys SET revoked_at = ? WHERE key_hash = ? AND revoked_at IS NULL').bind(now, await sha256Hex(b.key)).run();
   else if (b.key_id) res = await env.DB.prepare('UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').bind(now, b.key_id).run();
   else if (b.membership_id) res = await env.DB.prepare('UPDATE api_keys SET revoked_at = ? WHERE membership_id = ? AND revoked_at IS NULL').bind(now, b.membership_id).run();
-  else return json({ ok: false, error: 'key, key_id or membership_id required' }, 400);
+  else if (b.telegram_id && b.plan === 'trial') {
+    res = await env.DB.prepare("UPDATE api_keys SET revoked_at = ? WHERE telegram_id = ? AND plan = 'trial' AND revoked_at IS NULL")
+      .bind(now, String(b.telegram_id))
+      .run();
+  } else return json({ ok: false, error: 'key, key_id, membership_id or (telegram_id+plan=trial) required' }, 400);
   return json({ ok: true, revoked: res.meta ? res.meta.changes : 0 });
+}
+
+async function handleNudgePending(env) {
+  const nowIso = new Date().toISOString();
+  const rows = await env.DB.prepare(
+    `SELECT id, telegram_id, expires_at, limit_hit_at, created_at, label
+     FROM api_keys
+     WHERE plan = 'trial'
+       AND telegram_id IS NOT NULL
+       AND nudged_at IS NULL
+       AND (expires_at <= ? OR limit_hit_at IS NOT NULL)
+     ORDER BY created_at ASC
+     LIMIT 50`
+  )
+    .bind(nowIso)
+    .all();
+  return json({
+    ok: true,
+    trials: (rows.results || []).map((r) => ({
+      key_id: r.id,
+      telegram_id: r.telegram_id,
+      expires_at: r.expires_at,
+      limit_hit_at: r.limit_hit_at,
+      reason: r.limit_hit_at && (!r.expires_at || Date.parse(r.expires_at) > Date.now()) ? 'daily_limit' : 'expired',
+    })),
+    upgrade_url: PIONEER_CHECKOUT,
+  });
+}
+
+async function handleNudgeMark(req, env) {
+  const b = await req.json().catch(() => ({}));
+  const now = new Date().toISOString();
+  let res;
+  if (b.key_id) {
+    res = await env.DB.prepare('UPDATE api_keys SET nudged_at = ? WHERE id = ? AND nudged_at IS NULL').bind(now, b.key_id).run();
+  } else if (Array.isArray(b.key_ids) && b.key_ids.length) {
+    let changes = 0;
+    for (const id of b.key_ids.slice(0, 100)) {
+      const r = await env.DB.prepare('UPDATE api_keys SET nudged_at = ? WHERE id = ? AND nudged_at IS NULL').bind(now, id).run();
+      changes += r.meta ? r.meta.changes : 0;
+    }
+    return json({ ok: true, marked: changes });
+  } else {
+    return json({ ok: false, error: 'key_id or key_ids required' }, 400);
+  }
+  return json({ ok: true, marked: res.meta ? res.meta.changes : 0 });
+}
+
+function authGate(req, env, row) {
+  if (!row) {
+    return oaiError(401, 'Invalid or missing API key. Use: Authorization: Bearer <your N3mak key>', 'invalid_request_error', 'invalid_api_key');
+  }
+  if (isExpired(row)) {
+    return json(
+      {
+        error: {
+          message: `Trial expired. Get Pioneer $3: ${PIONEER_CHECKOUT}`,
+          type: 'invalid_request_error',
+          code: 'trial_expired',
+        },
+        upgrade_url: PIONEER_CHECKOUT,
+      },
+      401
+    );
+  }
+  return null;
 }
 
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const p = url.pathname.replace(/\/+$/, '') || '/';
+    const origin = req.headers.get('origin');
+
     if (req.method === 'OPTIONS') {
+      if (p === '/v1/demo/chat') {
+        if (origin && !corsOriginAllowed(origin)) {
+          return json({ error: 'origin not allowed' }, 403, corsHeaders(origin));
+        }
+        return new Response(null, { status: 204, headers: corsHeaders(origin) });
+      }
       return new Response(null, {
         headers: {
           'access-control-allow-origin': '*',
@@ -412,18 +741,33 @@ export default {
         },
       });
     }
+
     try {
-      if (p === '/' || p === '/health') return json({ ok: true, service: 'n3mak-gateway', base_url: baseUrl(env, req) });
+      if (p === '/' || p === '/health') {
+        return json({
+          ok: true,
+          service: 'n3mak-gateway',
+          base_url: baseUrl(env, req),
+          features: { trial: true, demo: true },
+        });
+      }
       if (p === '/webhooks/whop' && req.method === 'POST') return await handleWhop(req, env);
+
+      if (p === '/v1/demo/chat') return await handleDemoChat(req, env, ctx);
+
       if (p.startsWith('/admin/')) {
         if (!isAdmin(req, env)) return json({ ok: false, error: 'unauthorized' }, 401);
         if (p === '/admin/mint' && req.method === 'POST') return await handleAdminMint(req, env);
         if (p === '/admin/revoke' && req.method === 'POST') return await handleAdminRevoke(req, env);
+        if (p === '/admin/trials/nudge-pending' && req.method === 'GET') return await handleNudgePending(env);
+        if (p === '/admin/trials/nudge-mark' && req.method === 'POST') return await handleNudgeMark(req, env);
         return json({ ok: false, error: 'not found' }, 404);
       }
+
       if (p === '/v1/models' || p === '/v1/chat/completions') {
         const row = await lookupKey(env, bearer(req));
-        if (!row) return oaiError(401, 'Invalid or missing API key. Use: Authorization: Bearer <your N3mak key>', 'invalid_request_error', 'invalid_api_key');
+        const gate = authGate(req, env, row);
+        if (gate) return gate;
         const tier = TIERS[row.plan] || TIERS.pioneer;
         if (p === '/v1/models' && req.method === 'GET') {
           return json({ object: 'list', data: tier.models.map((id) => ({ id, object: 'model', created: 0, owned_by: 'n3mak' })) });
@@ -433,7 +777,7 @@ export default {
       }
       return json({ error: { message: 'Not found', type: 'invalid_request_error' } }, 404);
     } catch (e) {
-      return json({ error: { message: 'Internal error', type: 'api_error' } }, 500);
+      return json({ error: { message: 'Internal error', type: 'api_error', detail: String(e && e.message || e) } }, 500);
     }
   },
 };

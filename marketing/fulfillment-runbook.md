@@ -9,6 +9,18 @@ Never paste API keys into group chats. Prefer DM via `@N3mak_bot`.
 - Buyer must have pressed `/start` on `@N3mak_bot` before a Telegram DM works.
 - Owner chat id (ops): `320423744`. Official email: `N3mak.team@proton.me`.
 
+
+## Public BASE_URL (critical)
+
+Buyers must receive `OMNIROUTE_PUBLIC_BASE_URL` (HTTPS), never `127.0.0.1`.
+
+- Named Cloudflare Tunnel `n3mak-gateway` (id `28a1068e-4ad9-47e3-bbed-7192f967c26a`) is created on account `n3mak.team@proton.me`; token at `secrets/n3mak-gateway.tunnel-token` (mode 600).
+- No Cloudflare zone/DNS on the account yet → custom hostname not available.
+- Local path gateway: `scripts/public-gateway.mjs` on `:20130` exposes only `/v1/*` and `/webhooks/whop`.
+- **Blocker (2026-11-06):** `cloudflared` cannot connect to Cloudflare edge from this box — QUIC/HTTP2 to port 7844 fails (`TLS handshake with edge error: EOF`, precheck `hard_fail=true`). Not an Auto-review block. Until edge egress works or OmniRoute is hosted elsewhere, leave `OMNIROUTE_PUBLIC_BASE_URL` empty and do not ship localhost to buyers.
+
+Whop webhook: `POST ${PUBLIC_URL}/webhooks/whop` requires `WHOP_WEBHOOK_SECRET` (`ws_...` from Whop Developer → Webhooks). Missing secret → **401**. Memberships are deduped by `membershipId` under `/tmp/n3mak-fulfillments/`.
+
 ## 1) Find the purchase
 
 Any of:

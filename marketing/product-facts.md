@@ -11,23 +11,38 @@ Sources: bot code (`bot/src/whop.js`, `bot/src/fulfillment/whopFulfill.js`, `bot
 | Pro | $49 | https://whop.com/checkout/plan_SrqGnbkktuOUc | `plan_SrqGnbkktuOUc` |
 
 - Bot: https://t.me/N3mak_bot (`/buy`, `/pricing`, `/whop`)
-- Store: https://n3mak-buy.vercel.app/
-- Whop product page copy: “multi-model API with instant Telegram key delivery after Whop checkout”
-- Pioneer seat count mentioned on Whop/marketing: **10 seats** (marketing/Whop posts; not enforced in bot code)
+- Store: https://n3mak-buy.vercel.app/ — **live AI Gateway copy confirmed 2026-11-06** (no longer the old “سوق الموارد” marketplace page)
+- Whop product page still contains older wording that says “instant” — **do not repeat “instant” in new marketing**; prefer the live store timing below
+- Pioneer seat / capacity limit: **not shown on the live Whop checkout** for `plan_n2uiwphhI5YG7` as of **2026-11-06** (owner check). Do **not** claim “10 seats” or any seat cap in marketing.
+- **Marketing focus (2026-11-06):** promote **Pioneer $3 only**. Starter / Pro remain in the product/backend table below but are **paused in marketing** until they offer a real difference over Pioneer.
+
+## Delivery timing (live store)
+
+- **Live (public store copy):** the key arrives through `@N3mak_bot` **within a few hours** of payment on Whop.
+- Exact Arabic on store: «يصلك المفتاح عبر @N3mak_bot خلال ساعات قليلة بعد الدفع على Whop»
+- **Source:** live store page https://n3mak-buy.vercel.app/ , checked **2026-11-06**
+- **Owner approved:** **2026-11-06** — marketing may state this delivery timing as live policy.
+- **Never say instant / فوري**
 
 ## Per-plan limits (rate, tokens, models)
 
-- **not defined** in bot fulfillment: Pioneer / Starter / Pro all go through the same `fulfillMembership` path and receive an OmniRoute API key with the same scopes (`self:usage`); no quota, RPM, or model allow-list differs by plan in code.
-- Default model string delivered in the fulfillment message: `cfp/openai/gpt-oss-20b` (also “أو أي نموذج متاح عبر OmniRoute” / Codex via OmniRoute mentioned in older copy).
-- Exact catalog of sellable models per plan: **not defined** (OmniRoute exposes many models to a valid key; plan pages do not list a fixed set).
+Enforced in OmniRoute at mint time (`tierLimits.js` / `mint_omni_key.py`):
+
+| | Pioneer $3 | Starter $9 | Pro $49 |
+|--|------------|------------|---------|
+| `max_requests_per_day` | 200 | 1,000 | 10,000 |
+| `max_requests_per_minute` | 5 | 20 | 60 |
+| Models | restricted free/CFP (`cfp/*` + listed aliases) | free + mid-tier CFP list | `model_access_mode=all` |
+| `daily_usage_limit_usd` | $0.50 | $3 | $20 |
+
+- Default model in fulfillment message: `cfp/openai/gpt-oss-20b`.
+- Buyer-facing model + limits page: **not published** → keep as open before-posting item.
 
 ## Refund policy
 
-- **Live / published today:** **not defined** in code, bot copy, buy.html, or the Whop product page HTML inspected for this doc.
-- **PROPOSED, pending owner approval** (do not publish as live policy until approved):
-  - Full refund if the OmniRoute API key is not delivered within 24 hours of a confirmed Whop payment.
-  - Full refund if a delivered key does not work (auth failure / cannot call the gateway) after the buyer contacts support with the Whop receipt and Telegram username.
-  - Not yet wired into bot copy, Whop product page, or automated refund tooling.
+- **Live policy (owner approved 2026-11-06):** Full refund if the OmniRoute API key does not arrive within 24 hours of a confirmed Whop payment, or if a delivered key does not work (auth failure / cannot call the gateway) after the buyer contacts support with the Whop receipt and Telegram username.
+- Marketing may state this refund policy as live.
+- Note: may not yet be wired into bot copy, Whop product page HTML, or automated refund tooling — still the approved public promise as of 2026-11-06.
 
 ## How to upgrade from Pioneer
 
@@ -39,5 +54,13 @@ Sources: bot code (`bot/src/whop.js`, `bot/src/fulfillment/whopFulfill.js`, `bot
 
 - Endpoint: `POST /webhooks/whop` on the bot.
 - Allowed plan IDs: Pioneer + Starter + Pro (above). Disallowed: `plan_UKIjanDMOoEGV`.
-- Delivery: mint OmniRoute key → Telegram DM only if `telegram_id` is present in Whop metadata; otherwise key is recorded under `/tmp/n3mak-fulfillments/`.
+- Delivery mechanism: mint OmniRoute key → Telegram DM only if `telegram_id` is present in Whop metadata; otherwise key is recorded under `/tmp/n3mak-fulfillments/`.
+- Public timing claim for buyers: use the **live store** wording (within a few hours via @N3mak_bot) — never “instant”.
 - Public webhook reachability requires a live `PUBLIC_URL` / Whop webhook target; a dead Cloudflare tunnel URL does not receive events.
+
+## Assets
+
+- Logo: `/workspace/N3mak_Bot/marketing/assets/logo-512.png`
+- Store screenshot (current): `/workspace/N3mak_Bot/marketing/assets/store-home.png`
+- Previous screenshot kept as: `/workspace/N3mak_Bot/marketing/assets/store-home-old.png`
+- Maker identity: **N3mak team** (no personal names)

@@ -1,6 +1,6 @@
 # Tier differentiation proposal (NOT IMPLEMENTED)
 
-Status: **proposal only** — do not ship, market, or enforce until owner approves and fulfillment code is updated.
+Status: **IMPLEMENTED** (2026-11-06) in `tierLimits.js`, `mint_omni_key.py`, `whopFulfill.js`, `manual-fulfill.sh`. Pioneer RPM verified with parallel chat → HTTP 429 after 5/min.
 
 ## Current state (code)
 

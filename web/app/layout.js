@@ -2,7 +2,7 @@ import './globals.css';
 
 export const metadata = {
   title: 'N3mak AI Gateway — Pioneer $3',
-  description: 'Multi-model AI gateway via OmniRoute. Key delivered via @N3mak_bot within a few hours.',
+  description: 'Multi-model AI gateway. Key delivered via @N3mak_bot within a few hours.',
 };
 
 export default function RootLayout({ children }) {

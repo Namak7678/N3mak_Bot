@@ -1,28 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import catalog from '../../data/omniroute-models.json';
-import { ENDPOINTS, copy } from './copy';
-
-const AUTH_HEADER = 'Authorization: Bearer YOUR_API_KEY';
-
-function fill(template, values) {
-  return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
-}
+import { useMemo, useState } from 'react';
+import { AUTH_HEADER, DEFAULT_MODEL, ERRORS, PLANS, copy } from './copy';
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function examplesFor(baseUrl, model) {
+function examplesFor(baseUrl) {
   const root = baseUrl.replace(/\/$/, '');
   const chatBody = {
-    model,
+    model: DEFAULT_MODEL,
     messages: [{ role: 'user', content: 'ping' }],
-    max_tokens: 64,
   };
   const streamBody = {
-    model,
+    model: DEFAULT_MODEL,
     messages: [{ role: 'user', content: 'hi' }],
     stream: true,
   };
@@ -48,11 +40,11 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url=${JSON.stringify(root)},
-    api_key="YOUR_API_KEY",
+    api_key="n3k_...",
 )
 
 completion = client.chat.completions.create(
-    model=${JSON.stringify(model)},
+    model=${JSON.stringify(DEFAULT_MODEL)},
     messages=[{"role": "user", "content": "ping"}],
 )
 print(completion.choices[0].message.content)`,
@@ -65,7 +57,7 @@ print(completion.choices[0].message.content)`,
   ];
 }
 
-function CopyButton({ text, label, copiedLabel, compact = false }) {
+function CopyButton({ text, label, copiedLabel }) {
   const [copied, setCopied] = useState(false);
 
   async function onCopy() {
@@ -83,7 +75,7 @@ function CopyButton({ text, label, copiedLabel, compact = false }) {
         document.execCommand('copy');
         area.remove();
       } catch {
-        // Keep the copied state so the button still confirms the click.
+        // Still confirm the click if the clipboard is blocked.
       }
     }
     setCopied(true);
@@ -91,72 +83,27 @@ function CopyButton({ text, label, copiedLabel, compact = false }) {
   }
 
   return (
-    <button type="button" className={compact ? 'docs-copy docs-copy-compact' : 'docs-copy'} onClick={onCopy}>
+    <button type="button" className="docs-copy" onClick={onCopy}>
       {copied ? copiedLabel : label}
     </button>
   );
 }
 
-function ProviderGroup({ provider, query, t }) {
-  const detailsRef = useRef(null);
-  const expanded = Boolean(query.trim()) || provider.id === 'cloudflare-playground';
-
-  useEffect(() => {
-    if (detailsRef.current) detailsRef.current.open = expanded;
-  }, [expanded, query, provider.id]);
-
+function ModelIds({ ids }) {
   return (
-    <details ref={detailsRef} className="data-card docs-provider">
-      <summary>
-        <span>{provider.label}</span>
-        <span className="docs-meta">
-          {t.alias}: {provider.alias} · {provider.kindLabel} · {provider.models.length}
-        </span>
-      </summary>
-      {t.providerNotes[provider.id] ? <p className="docs-sub">{t.providerNotes[provider.id]}</p> : null}
-      <ul className="docs-models">
-        {provider.models.map((id) => (
-          <li key={id}>
-            <span className="docs-id">{id}</span>
-            <CopyButton text={id} label={t.copyModel} copiedLabel={t.copied} compact />
-          </li>
-        ))}
-      </ul>
-    </details>
+    <ul className="docs-model-list">
+      {ids.map((id) => (
+        <li key={id}><code className="docs-id" dir="ltr">{id}</code></li>
+      ))}
+    </ul>
   );
 }
 
-function providerMatch(provider, label, kindLabel, query) {
-  return [provider.id, provider.alias, label, kindLabel].join(' ').toLowerCase().includes(query);
-}
-
-export default function DocsClient({ baseUrl, isPlaceholder }) {
+export default function DocsClient({ baseUrl }) {
   const [lang, setLang] = useState('ar');
-  const [query, setQuery] = useState('');
   const t = copy[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
-  const model = catalog.defaultModel;
-  const examples = useMemo(() => examplesFor(baseUrl, model), [baseUrl, model]);
-  const providersById = useMemo(
-    () => Object.fromEntries(catalog.providers.map((provider) => [provider.id, provider])),
-    [],
-  );
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return catalog.providers
-      .map((provider) => {
-        const label = t.providers[provider.id] || provider.id;
-        const kindLabel = t.kinds[provider.kind] || provider.kind;
-        const idHits = q ? provider.models.filter((id) => id.toLowerCase().includes(q)) : provider.models;
-        const showAll = q && idHits.length === 0 && providerMatch(provider, label, kindLabel, q);
-        const models = !q || showAll ? provider.models : idHits;
-        return { ...provider, label, kindLabel, models };
-      })
-      .filter((provider) => provider.models.length > 0);
-  }, [query, t]);
-
-  const shown = filtered.reduce((sum, provider) => sum + provider.models.length, 0);
+  const examples = useMemo(() => examplesFor(baseUrl), [baseUrl]);
 
   return (
     <div className="docs" dir={dir} lang={lang}>
@@ -192,13 +139,6 @@ export default function DocsClient({ baseUrl, isPlaceholder }) {
           ))}
         </nav>
 
-        {isPlaceholder ? (
-          <div className="docs-placeholder">
-            <p><strong>{t.placeholderBadge}.</strong> {t.placeholderBody}</p>
-            <code dir="ltr">{baseUrl}</code>
-          </div>
-        ) : null}
-
         <section id="start" className="docs-quick">
           <article className="data-card">
             <h2>{t.baseTitle}</h2>
@@ -207,7 +147,7 @@ export default function DocsClient({ baseUrl, isPlaceholder }) {
               <code dir="ltr">{baseUrl}</code>
               <CopyButton text={baseUrl} label={t.copy} copiedLabel={t.copied} />
             </div>
-            {isPlaceholder ? <span className="status-badge status-soon">{t.placeholderBadge}</span> : null}
+            <p className="docs-sub docs-card-note">{t.baseNote}</p>
           </article>
           <article className="data-card">
             <h2>{t.authTitle}</h2>
@@ -218,27 +158,13 @@ export default function DocsClient({ baseUrl, isPlaceholder }) {
             </div>
           </article>
           <article className="data-card">
-            <h2>{t.defaultTitle}</h2>
-            <p>{t.defaultBody}</p>
+            <h2>{t.modelTitle}</h2>
+            <p>{t.modelBody}</p>
             <div className="docs-kv">
-              <code dir="ltr">{model}</code>
-              <CopyButton text={model} label={t.copy} copiedLabel={t.copied} />
+              <code dir="ltr">{DEFAULT_MODEL}</code>
+              <CopyButton text={DEFAULT_MODEL} label={t.copy} copiedLabel={t.copied} />
             </div>
           </article>
-        </section>
-
-        <section id="examples">
-          <h2>{t.examplesTitle}</h2>
-          <p className="docs-sub">{t.examplesBody}</p>
-          {examples.map((example) => (
-            <article key={example.key} className="docs-example data-card">
-              <div className="docs-example-head">
-                <h3>{t[example.key]}</h3>
-                <CopyButton text={example.code} label={t.copy} copiedLabel={t.copied} />
-              </div>
-              <pre className="docs-code"><code>{example.code}</code></pre>
-            </article>
-          ))}
         </section>
 
         <section id="models">
@@ -248,55 +174,68 @@ export default function DocsClient({ baseUrl, isPlaceholder }) {
             <table className="docs-table">
               <thead>
                 <tr>
-                  <th>{t.colModel}</th>
-                  <th>{t.colRole}</th>
-                  <th>{t.colProvider}</th>
+                  <th>{t.colPlan}</th>
+                  <th>{t.colModels}</th>
                 </tr>
               </thead>
-              {catalog.popular.map((group) => {
-                const provider = providersById[group.providerId];
-                const label = t.providers[group.providerId] || group.providerId;
-                return (
-                  <tbody key={group.providerId}>
-                    <tr className="docs-group">
-                      <th colSpan={3}>{label} · {provider.alias}</th>
-                    </tr>
-                    {group.models.map((item) => (
-                      <tr key={item.id}>
-                        <td>
-                          <div className="docs-id-row">
-                            <span className="docs-id">{item.id}</span>
-                            <CopyButton text={item.id} label={t.copy} copiedLabel={t.copied} compact />
-                          </div>
-                        </td>
-                        <td>{t.roles[item.role]}</td>
-                        <td>{provider.id}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                );
-              })}
+              <tbody>
+                {PLANS.map((plan) => (
+                  <tr key={plan.id}>
+                    <td>{t.plans[plan.id]} {plan.price}</td>
+                    <td><ModelIds ids={plan.models} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="docs-note">
+            <code className="docs-inline" dir="ltr">{DEFAULT_MODEL}</code>{' '}
+            {t.aliasBefore}{' '}
+            <code className="docs-inline" dir="ltr">cfp/openai/gpt-oss-20b</code>{' '}
+            {t.aliasOr}{' '}
+            <code className="docs-inline" dir="ltr">@cf/openai/gpt-oss-20b</code>.
+          </p>
+        </section>
+
+        <section id="limits">
+          <h2>{t.limitsTitle}</h2>
+          <p className="docs-sub">{t.limitsBody}</p>
+          <div className="docs-table-wrap data-card">
+            <table className="docs-table">
+              <thead>
+                <tr>
+                  <th>{t.colPlan}</th>
+                  <th>{t.colDay}</th>
+                  <th>{t.colMinute}</th>
+                  <th>{t.colTokens}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PLANS.map((plan) => (
+                  <tr key={plan.id}>
+                    <td>{t.plans[plan.id]} {plan.price}</td>
+                    <td>{plan.rpd.toLocaleString('en-US')}</td>
+                    <td>{plan.rpm}</td>
+                    <td>{plan.maxTokens.toLocaleString('en-US')}</td>
+                  </tr>
+                ))}
+              </tbody>
             </table>
           </div>
         </section>
 
-        <section id="catalog">
-          <h2>{t.catalogTitle}</h2>
-          <p className="docs-sub">{t.catalogBody}</p>
-          <label className="docs-search-label" htmlFor="model-search">{t.searchLabel}</label>
-          <input
-            id="model-search"
-            className="docs-search"
-            dir="auto"
-            type="search"
-            value={query}
-            placeholder={t.searchPlaceholder}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <p className="docs-count">{fill(t.matchCount, { shown, total: catalog.total })}</p>
-          {filtered.length === 0 ? <p className="data-card docs-sub">{t.noMatches}</p> : null}
-          {filtered.map((provider) => (
-            <ProviderGroup key={provider.id} provider={provider} query={query} t={t} />
+        <section id="examples">
+          <h2>{t.examplesTitle}</h2>
+          <p className="docs-sub">{t.examplesBody}</p>
+          <p className="docs-note">{t.streamNote}</p>
+          {examples.map((example) => (
+            <article key={example.key} className="docs-example data-card">
+              <div className="docs-example-head">
+                <h3>{t[example.key]}</h3>
+                <CopyButton text={example.code} label={t.copy} copiedLabel={t.copied} />
+              </div>
+              <pre className="docs-code"><code>{example.code}</code></pre>
+            </article>
           ))}
         </section>
 
@@ -313,19 +252,44 @@ export default function DocsClient({ baseUrl, isPlaceholder }) {
                 </tr>
               </thead>
               <tbody>
-                {ENDPOINTS.map((endpoint) => (
-                  <tr key={`${endpoint.method} ${endpoint.path}`}>
-                    <td>{endpoint.method}</td>
-                    <td><span className="docs-id">{endpoint.path}</span></td>
-                    <td>{t.endpointNotes[endpoint.note]}</td>
-                  </tr>
-                ))}
+                <tr>
+                  <td>GET</td>
+                  <td><code className="docs-id" dir="ltr">/v1/models</code></td>
+                  <td>{t.epModels}</td>
+                </tr>
+                <tr>
+                  <td>POST</td>
+                  <td><code className="docs-id" dir="ltr">/v1/chat/completions</code></td>
+                  <td>{t.epChat}</td>
+                </tr>
               </tbody>
             </table>
           </div>
         </section>
 
-        <p className="docs-note">{fill(t.availability, { total: catalog.total })}</p>
+        <section id="errors">
+          <h2>{t.errorsTitle}</h2>
+          <p className="docs-sub">{t.errorsBody}</p>
+          <div className="docs-table-wrap data-card">
+            <table className="docs-table">
+              <thead>
+                <tr>
+                  <th>{t.colStatus}</th>
+                  <th>{t.colWhen}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ERRORS.map((row) => (
+                  <tr key={row.status}>
+                    <td>{row.status}</td>
+                    <td>{t[row.key]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="docs-note">{t.e400}</p>
+        </section>
       </div>
     </div>
   );

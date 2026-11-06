@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { randomUUID } = require('crypto');
+const { getTierLimits, resolvePlanKey } = require('./tierLimits');
 
 const PIONEER_PLAN = process.env.WHOP_PIONEER_PLAN_ID || 'plan_n2uiwphhI5YG7';
 const STARTER_PLAN = process.env.WHOP_PLAN_ID || 'plan_IkWmnOwW1ShYY';
@@ -32,7 +33,14 @@ const PLAN_LABEL = {
   plan_SrqGnbkktuOUc: 'Pro $49',
 };
 
+function publicBaseUrl() {
+  const pub = (process.env.OMNIROUTE_PUBLIC_BASE_URL || '').trim();
+  if (pub && !/127\.0\.0\.1|localhost/i.test(pub)) return pub.replace(/\/$/, '');
+  return '';
+}
+
 const BASE_URL =
+  publicBaseUrl() ||
   process.env.OMNIROUTE_PUBLIC_BASE_URL ||
   process.env.OPENAI_BASE_URL ||
   'http://127.0.0.1:20128/v1';
@@ -130,26 +138,79 @@ async function createKeyViaHttp(name) {
 }
 
 /** Fallback: mint into OmniRoute SQLite via Python helper (no native addon). */
-function createKeyViaSqlite(name) {
+function createKeyViaSqlite(name, planId) {
   const { execFileSync } = require('child_process');
   const script = path.join(__dirname, 'mint_omni_key.py');
-  const out = execFileSync('python3', [script, name], {
+  const plan = resolvePlanKey(planId);
+  const out = execFileSync('python3', [script, name, plan], {
     encoding: 'utf8',
-    env: { ...process.env },
+    env: { ...process.env, N3MAK_PLAN: plan },
     timeout: 15000,
   }).trim();
   const parsed = JSON.parse(out);
   if (!parsed.key) throw new Error('sqlite mint returned no key');
-  return { key: parsed.key, id: parsed.id, via: 'sqlite' };
+  return { key: parsed.key, id: parsed.id, via: 'sqlite', limits: parsed.limits || null, plan: parsed.plan || plan };
+}
+
+/** Apply tier limits after HTTP create (POST /api/keys does not set RPD/RPM). */
+function applyTierLimitsSqlite(keyId, planId) {
+  const tier = getTierLimits(planId);
+  const Database = null;
+  const { execFileSync } = require('child_process');
+  const sql = `
+import sqlite3, json, os
+from pathlib import Path
+db = os.environ.get('OMNIROUTE_SQLITE_PATH') or str(Path.home()/'.omniroute'/'storage.sqlite')
+con = sqlite3.connect(db)
+con.execute('''UPDATE api_keys SET
+  max_requests_per_day=?, max_requests_per_minute=?,
+  model_access_mode=?, allowed_models=?,
+  usage_limit_enabled=?, daily_usage_limit_usd=?
+  WHERE id=?''', (
+  int(os.environ['RPD']), int(os.environ['RPM']),
+  os.environ['MODE'], os.environ['MODELS'],
+  1, float(os.environ['USD']), os.environ['KID']))
+con.commit(); print('updated', con.total_changes); con.close()
+`
+  execFileSync('python3', ['-c', sql], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      RPD: String(tier.maxRequestsPerDay),
+      RPM: String(tier.maxRequestsPerMinute),
+      MODE: tier.modelAccessMode,
+      MODELS: JSON.stringify(tier.allowedModels),
+      USD: String(tier.dailyUsageLimitUsd),
+      KID: keyId,
+    },
+    timeout: 10000,
+  });
+  return tier;
 }
 
 async function createOmniRouteKey({ membershipId, planId }) {
   const name = `whop-${planLabel(planId).replace(/\s+/g, '-').toLowerCase()}-${String(membershipId).slice(0, 24)}`;
+  const tier = getTierLimits(planId);
   try {
-    return await createKeyViaHttp(name);
+    const created = await createKeyViaHttp(name);
+    try {
+      applyTierLimitsSqlite(created.id, planId);
+      created.limits = {
+        max_requests_per_day: tier.maxRequestsPerDay,
+        max_requests_per_minute: tier.maxRequestsPerMinute,
+        model_access_mode: tier.modelAccessMode,
+        allowed_models: tier.allowedModels,
+        usage_limit_enabled: tier.usageLimitEnabled,
+        daily_usage_limit_usd: tier.dailyUsageLimitUsd,
+      };
+      created.limitsVia = 'sqlite-patch';
+    } catch (e) {
+      created.limitsError = e.message;
+    }
+    return created;
   } catch (httpErr) {
     try {
-      const created = createKeyViaSqlite(name);
+      const created = createKeyViaSqlite(name, planId);
       created.httpError = httpErr.message;
       return created;
     } catch (sqliteErr) {
@@ -161,14 +222,25 @@ async function createOmniRouteKey({ membershipId, planId }) {
   }
 }
 
-function deliveryMessage({ key, email, membershipId, planId, baseUrl }) {
+function deliveryMessage({ key, email, membershipId, planId, baseUrl, limits }) {
   const label = planLabel(planId);
+  const base = baseUrl || publicBaseUrl() || BASE_URL;
+  const local = /127\.0\.0\.1|localhost/i.test(base);
+  const tier = limits || getTierLimits(planId);
+  const lim =
+    tier && (tier.maxRequestsPerMinute || tier.max_requests_per_minute)
+      ? `\nLimits: ${tier.maxRequestsPerDay || tier.max_requests_per_day}/day, ${tier.maxRequestsPerMinute || tier.max_requests_per_minute}/min, spend cap $${tier.dailyUsageLimitUsd ?? tier.daily_usage_limit_usd}/day\n`
+      : '';
   return (
     `✅ تم تفعيل N3mak AI Gateway (${label})\n\n` +
-    `BASE_URL: ${baseUrl || BASE_URL}\n` +
+    `BASE_URL: ${base}\n` +
     `API_KEY: ${key}\n` +
-    `MODEL: cfp/openai/gpt-oss-20b (أو أي نموذج متاح عبر OmniRoute)\n\n` +
-    `Membership: ${membershipId}\n` +
+    `MODEL: cfp/openai/gpt-oss-20b\n` +
+    lim +
+    (local
+      ? '\n⚠️ Public gateway URL not ready yet — do not use 127.0.0.1 from your device. Contact @N3mak_bot support for the live BASE_URL.\n'
+      : '') +
+    `\nMembership: ${membershipId}\n` +
     (planId ? `Plan: ${planId}\n` : '') +
     (email ? `Email: ${email}\n` : '') +
     `\nاستخدمها كـ OpenAI-compatible client. Bot: @N3mak_bot\n` +
@@ -184,13 +256,40 @@ function recordFulfillment(entry) {
   return file;
 }
 
-async function fulfillMembership({ membershipId, email, telegramId, sendTelegram, planId }) {
+function fulfillmentPath(membershipId) {
+  return path.join('/tmp', 'n3mak-fulfillments', `${membershipId}.json`);
+}
+
+function readExistingFulfillment(membershipId) {
+  try {
+    const file = fulfillmentPath(membershipId);
+    if (!fs.existsSync(file)) return null;
+    return { file, data: JSON.parse(fs.readFileSync(file, 'utf8')) };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fulfillMembership({ membershipId, email, telegramId, sendTelegram, planId, webhookId }) {
   if (!isAllowedPlan(planId)) {
     return { skipped: true, reason: 'disallowed_plan', planId };
   }
+  const existing = readExistingFulfillment(membershipId);
+  if (existing?.data?.key) {
+    return {
+      skipped: true,
+      reason: 'already_fulfilled',
+      membershipId,
+      keyId: existing.data.keyId || null,
+      file: existing.file,
+      duplicate: true,
+      webhookId: webhookId || null,
+    };
+  }
   const created = await createOmniRouteKey({ membershipId, planId });
   const key = created.key;
-  const msg = deliveryMessage({ key, email, membershipId, planId });
+  const base = publicBaseUrl() || BASE_URL;
+  const msg = deliveryMessage({ key, email, membershipId, planId, baseUrl: base, limits: created.limits });
   const file = recordFulfillment({
     membershipId,
     email,
@@ -200,13 +299,15 @@ async function fulfillMembership({ membershipId, email, telegramId, sendTelegram
     key,
     keyId: created.id || null,
     mintVia: created.via,
-    baseUrl: BASE_URL,
+    limits: created.limits || null,
+    baseUrl: base,
+    webhookId: webhookId || null,
     at: new Date().toISOString(),
   });
   if (telegramId && typeof sendTelegram === 'function') {
     await sendTelegram(telegramId, msg);
   }
-  return { key, file, msg, via: created.via, planId };
+  return { key, file, msg, via: created.via, planId, limits: created.limits || null };
 }
 
 module.exports = {
@@ -214,6 +315,7 @@ module.exports = {
   mintKey,
   createOmniRouteKey,
   deliveryMessage,
+  publicBaseUrl,
   PLAN_ID,
   PIONEER_PLAN,
   STARTER_PLAN,
@@ -221,4 +323,6 @@ module.exports = {
   ALLOWED_PLANS,
   isAllowedPlan,
   planLabel,
+  getTierLimits,
+  resolvePlanKey,
 };

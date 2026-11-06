@@ -1,25 +1,22 @@
 # Manual Whop fulfillment runbook
 
-Use this until Render hosts the bot and Whop can hit `POST /webhooks/whop`.
+Use this for purchases without a Telegram id, or if the Whop webhook isn't configured yet.
 Never paste API keys into group chats. Prefer DM via `@N3mak_bot`.
 
 ## 0) Preconditions
 
-- Box services up: bot `:3010`, OmniRoute `:20128`, Redis, Postgres.
+- Gateway up: `curl https://n3mak-gateway.n3mak.workers.dev/health` → `ok:true` (box services not required for buyer keys).
 - Buyer must have pressed `/start` on `@N3mak_bot` before a Telegram DM works.
 - Owner chat id (ops): `320423744`. Official email: `N3mak.team@proton.me`.
 
 
 ## Public BASE_URL (critical)
 
-Buyers must receive `OMNIROUTE_PUBLIC_BASE_URL` (HTTPS), never `127.0.0.1`.
+Buyers get **`https://n3mak-gateway.n3mak.workers.dev/v1`** (Cloudflare Worker `n3mak-gateway`, source `gateway-worker/`). It runs on Cloudflare, not on the box, so keys work even if the box is down. Never send `127.0.0.1`.
 
-- Named Cloudflare Tunnel `n3mak-gateway` (id `28a1068e-4ad9-47e3-bbed-7192f967c26a`) is created on account `n3mak.team@proton.me`; token at `secrets/n3mak-gateway.tunnel-token` (mode 600).
-- No Cloudflare zone/DNS on the account yet → custom hostname not available.
-- Local path gateway: `scripts/public-gateway.mjs` on `:20130` exposes only `/v1/*` and `/webhooks/whop`.
-- **Blocker (2026-11-06):** `cloudflared` cannot connect to Cloudflare edge from this box — QUIC/HTTP2 to port 7844 fails (`TLS handshake with edge error: EOF`, precheck `hard_fail=true`). Not an Auto-review block. Until edge egress works or OmniRoute is hosted elsewhere, leave `OMNIROUTE_PUBLIC_BASE_URL` empty and do not ship localhost to buyers.
-
-Whop webhook: `POST ${PUBLIC_URL}/webhooks/whop` requires `WHOP_WEBHOOK_SECRET` (`ws_...` from Whop Developer → Webhooks). Missing secret → **401**. Memberships are deduped by `membershipId` under `/tmp/n3mak-fulfillments/`.
+- Keys: `n3k_…`, minted by the Worker (`/admin/mint`), stored hashed in D1, per-plan RPD/RPM/models enforced.
+- Whop webhook URL: `https://n3mak-gateway.n3mak.workers.dev/webhooks/whop` — needs Worker secret `WHOP_WEBHOOK_SECRET` (`ws_...` from Whop Developer → Webhooks). Missing/forged signature → **401**. Deduped per membership in D1.
+- On a webhook sale the Worker DMs the buyer (if checkout metadata has `telegram_id`) and always sends the owner (chat `320423744`) a sale notice with plan, membership and key.
 
 ## 1) Find the purchase
 
@@ -31,93 +28,37 @@ Any of:
 
 Capture: `membership_id`, buyer email, plan id, and Telegram id if present in checkout metadata.
 
-## 2) Mint an OmniRoute key
-
-From repo root (label the key with membership + plan):
+## 2) Mint + deliver (one command)
 
 ```bash
 cd /workspace/N3mak_Bot
-LABEL="whop-pioneer-<membershipId>"   # or starter / pro
-python3 bot/src/fulfillment/mint_omni_key.py "$LABEL"
+bash scripts/manual-fulfill.sh <telegram_id|-> <pioneer|starter|pro> <membership_id> [email]
 ```
 
-Or one-shot helper (mints + verifies + DMs):
+Calls `POST https://n3mak-gateway.n3mak.workers.dev/admin/mint` with the admin token from `secrets/n3mak-gateway.admin-token`. The Worker mints the key, DMs the buyer via @N3mak_bot (if a telegram id is given), and sends the owner the key. Use `-` for no Telegram id; then deliver from the owner notice via Whop message / email. Same membership twice → 409 (no double keys).
+
+If the buyer DM fails ("bot can't initiate conversation"): buyer must open https://t.me/N3mak_bot and press `/start`; then forward the key from the owner notice.
+
+## 3) Verify (optional)
 
 ```bash
-bash scripts/manual-fulfill.sh <telegram_id> <pioneer|starter|pro> [membership_id]
+KEY='n3k_…'
+curl -sS https://n3mak-gateway.n3mak.workers.dev/v1/models -H "Authorization: Bearer $KEY"     # 200
+curl -sS https://n3mak-gateway.n3mak.workers.dev/v1/chat/completions -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' -d '{"model":"gpt-oss-20b","messages":[{"role":"user","content":"ping"}]}'  # 200
 ```
 
-Output is JSON with `key` and `id`. Do not log the full key to shared channels.
-
-HTTP mint (`POST /api/keys` via `whopFulfill.js`) is preferred when `OMNIROUTE_MANAGE_API_KEY` works; otherwise the Python SQLite path is the fallback (same as production fulfill).
-
-## 3) Verify the key
+## 4) Revoke
 
 ```bash
-KEY='sk-…'   # from mint output
-curl -sS -o /tmp/models.json -w '%{http_code}\n' \
-  -H "Authorization: Bearer $KEY" \
-  http://127.0.0.1:20128/v1/models
-# expect 200
-
-curl -sS -o /tmp/chat.json -w '%{http_code}\n' \
-  -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
-  -d '{"model":"cfp/openai/gpt-oss-20b","messages":[{"role":"user","content":"ping"}],"max_tokens":16}' \
-  http://127.0.0.1:20128/v1/chat/completions
-# expect 200 and a choices[0].message
+curl -sS -X POST https://n3mak-gateway.n3mak.workers.dev/admin/revoke \
+  -H "Authorization: Bearer $(cat secrets/n3mak-gateway.admin-token)" -H 'Content-Type: application/json' \
+  -d '{"membership_id":"<membership_id>"}'     # or {"key_id":"key_…"}
 ```
-
-Public BASE_URL for buyers (when hosted): value of `OMNIROUTE_PUBLIC_BASE_URL` / store copy. Local verify uses `http://127.0.0.1:20128/v1`.
-
-## 4) Deliver
-
-**Preferred — helper (marks TEST when membership starts with `test-`):**
-
-```bash
-bash scripts/manual-fulfill.sh <telegram_id> pioneer <membership_id>
-```
-
-**Manual Telegram send** (token from `bot/.env`, never echo it):
-
-```bash
-set -a; source bot/.env; set +a
-curl -sS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-  -d chat_id=<telegram_id> \
-  --data-urlencode text="$(cat <<MSG
-✅ تم تفعيل N3mak AI Gateway (Pioneer \$3)
-
-BASE_URL: <public or local /v1>
-API_KEY: <key>
-MODEL: cfp/openai/gpt-oss-20b
-
-Membership: <membership_id>
-Bot: @N3mak_bot — للترقية: /buy
-MSG
-)"
-unset TELEGRAM_BOT_TOKEN
-```
-
-If send fails with “bot can't initiate conversation” / 403: buyer must open https://t.me/N3mak_bot and press `/start`, then retry. Until then deliver via Whop message or email to the receipt address (`N3mak.team@proton.me` CC ops).
 
 ## 5) Record
 
-Write `/tmp/n3mak-fulfillments/<membershipId>.json` with membershipId, email, telegramId, planId, keyId, mintVia, baseUrl, `at` ISO timestamp (helper does this). Keep a one-line note in ops chat: fulfilled / pending Telegram / emailed.
-
-## 6) Revoke a test key
-
-Preferred (works on this box): `DELETE /api/keys/{id}` with the manage token from `~/.omniroute/.env` (`OMNIROUTE_API_KEY`). The copy in `/workspace/omniroute/.env` may 403.
-
-```bash
-# load manage token from ~/.omniroute/.env without printing it
-set -a; source "$HOME/.omniroute/.env"; set +a
-curl -sS -o /tmp/revoke.json -w '%{http_code}\n' -X DELETE \
-  -H "Authorization: Bearer $OMNIROUTE_API_KEY" \
-  http://127.0.0.1:20128/api/keys/<key-uuid>
-# expect 200; then /v1/models with that key returns 401
-unset OMNIROUTE_API_KEY
-```
-
-Fallback if DELETE is unavailable: delete the row from OmniRoute SQLite (`~/.omniroute/storage.sqlite` table `api_keys`). Setting `is_active=0` alone may not take effect until cache refresh.
+The Worker records every key (D1 `api_keys`, hashed) and webhook fulfillment (D1 `fulfillments`). Post a one-line note in the ops chat: fulfilled / pending Telegram / emailed.
 
 ## Plans quick map
 

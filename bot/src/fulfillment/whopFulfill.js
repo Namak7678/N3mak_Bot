@@ -188,7 +188,56 @@ con.commit(); print('updated', con.total_changes); con.close()
   return tier;
 }
 
+/** Public Cloudflare gateway (n3mak-gateway Worker). Preferred: keys work from the internet. */
+function gatewayAdminToken() {
+  if (process.env.N3MAK_GATEWAY_ADMIN_TOKEN) return process.env.N3MAK_GATEWAY_ADMIN_TOKEN.trim();
+  const f =
+    process.env.N3MAK_GATEWAY_ADMIN_TOKEN_FILE ||
+    path.join(__dirname, '..', '..', '..', 'secrets', 'n3mak-gateway.admin-token');
+  try {
+    return fs.readFileSync(f, 'utf8').trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+function gatewayOrigin() {
+  const u = (process.env.N3MAK_GATEWAY_URL || '').trim();
+  if (u) return u.replace(/\/$/, '');
+  const pub = publicBaseUrl();
+  if (/workers\.dev/i.test(pub)) return pub.replace(/\/v1$/, '');
+  return '';
+}
+
+async function createKeyViaGateway({ membershipId, planId }) {
+  const origin = gatewayOrigin();
+  const token = gatewayAdminToken();
+  if (!origin || !token) throw new Error('gateway not configured');
+  const res = await fetch(`${origin}/admin/mint`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan: resolvePlanKey(planId), membership_id: membershipId || null, notify: false }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.key) throw new Error(body.error || `gateway HTTP ${res.status}`);
+  const tier = getTierLimits(planId);
+  return {
+    key: body.key,
+    id: body.id,
+    via: 'gateway',
+    baseUrl: body.base_url,
+    limits: {
+      max_requests_per_day: body.limits?.rpd ?? tier.maxRequestsPerDay,
+      max_requests_per_minute: body.limits?.rpm ?? tier.maxRequestsPerMinute,
+      allowed_models: body.limits?.models || [],
+    },
+  };
+}
+
 async function createOmniRouteKey({ membershipId, planId }) {
+  if (gatewayOrigin() && gatewayAdminToken()) {
+    return createKeyViaGateway({ membershipId, planId });
+  }
   const name = `whop-${planLabel(planId).replace(/\s+/g, '-').toLowerCase()}-${String(membershipId).slice(0, 24)}`;
   const tier = getTierLimits(planId);
   try {
@@ -229,14 +278,17 @@ function deliveryMessage({ key, email, membershipId, planId, baseUrl, limits }) 
   const tier = limits || getTierLimits(planId);
   const lim =
     tier && (tier.maxRequestsPerMinute || tier.max_requests_per_minute)
-      ? `\nLimits: ${tier.maxRequestsPerDay || tier.max_requests_per_day}/day, ${tier.maxRequestsPerMinute || tier.max_requests_per_minute}/min, spend cap $${tier.dailyUsageLimitUsd ?? tier.daily_usage_limit_usd}/day\n`
+      ? `\nLimits: ${tier.maxRequestsPerDay || tier.max_requests_per_day}/day, ${tier.maxRequestsPerMinute || tier.max_requests_per_minute}/min\n`
       : '';
   return (
     `✅ تم تفعيل N3mak AI Gateway (${label})\n\n` +
     `BASE_URL: ${base}\n` +
     `API_KEY: ${key}\n` +
-    `MODEL: cfp/openai/gpt-oss-20b\n` +
+    `MODEL: gpt-oss-20b\n` +
     lim +
+    (local
+      ? ''
+      : `\nExample:\ncurl ${base}/chat/completions -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" -d '{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}'\n`) +
     (local
       ? '\n⚠️ Public gateway URL not ready yet — do not use 127.0.0.1 from your device. Contact @N3mak_bot support for the live BASE_URL.\n'
       : '') +
@@ -288,7 +340,7 @@ async function fulfillMembership({ membershipId, email, telegramId, sendTelegram
   }
   const created = await createOmniRouteKey({ membershipId, planId });
   const key = created.key;
-  const base = publicBaseUrl() || BASE_URL;
+  const base = created.baseUrl || publicBaseUrl() || BASE_URL;
   const msg = deliveryMessage({ key, email, membershipId, planId, baseUrl: base, limits: created.limits });
   const file = recordFulfillment({
     membershipId,

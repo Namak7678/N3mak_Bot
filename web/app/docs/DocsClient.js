@@ -191,13 +191,6 @@ export default function DocsClient({ baseUrl }) {
             </table>
           </div>
           <p className="docs-note">
-            <code className="docs-inline" dir="ltr">{DEFAULT_MODEL}</code>{' '}
-            {t.aliasBefore}{' '}
-            <code className="docs-inline" dir="ltr">cfp/openai/gpt-oss-20b</code>{' '}
-            {t.aliasOr}{' '}
-            <code className="docs-inline" dir="ltr">@cf/openai/gpt-oss-20b</code>.
-          </p>
-          <p className="docs-note">
             {t.trialHowBefore}{' '}
             <a href="https://t.me/N3mak_bot" target="_blank" rel="noreferrer" dir="ltr">@N3mak_bot</a>{' '}
             {t.trialHowMid}{' '}

@@ -10,8 +10,7 @@ export const metadata = {
 
 function resolveBaseUrl() {
   const gateway = process.env.NEXT_PUBLIC_GATEWAY_BASE_URL?.trim();
-  const legacy = process.env.NEXT_PUBLIC_OMNIROUTE_BASE_URL?.trim();
-  return (gateway || legacy || DEFAULT_BASE_URL).replace(/\/$/, '');
+  return (gateway || DEFAULT_BASE_URL).replace(/\/$/, '');
 }
 
 export default function DocsPage() {

@@ -183,7 +183,7 @@ export default function DocsClient({ baseUrl }) {
               <tbody>
                 {PLANS.map((plan) => (
                   <tr key={plan.id}>
-                    <td>{t.plans[plan.id]} {plan.price}</td>
+                    <td>{t.plans[plan.id]}{plan.price ? ` ${plan.price}` : ` · ${t.free}`}</td>
                     <td><ModelIds ids={plan.models} /></td>
                   </tr>
                 ))}
@@ -196,6 +196,13 @@ export default function DocsClient({ baseUrl }) {
             <code className="docs-inline" dir="ltr">cfp/openai/gpt-oss-20b</code>{' '}
             {t.aliasOr}{' '}
             <code className="docs-inline" dir="ltr">@cf/openai/gpt-oss-20b</code>.
+          </p>
+          <p className="docs-note">
+            {t.trialHowBefore}{' '}
+            <a href="https://t.me/N3mak_bot" target="_blank" rel="noreferrer" dir="ltr">@N3mak_bot</a>{' '}
+            {t.trialHowMid}{' '}
+            <code className="docs-inline" dir="ltr">/trial</code>
+            {t.trialHowAfter}
           </p>
         </section>
 
@@ -215,7 +222,7 @@ export default function DocsClient({ baseUrl }) {
               <tbody>
                 {PLANS.map((plan) => (
                   <tr key={plan.id}>
-                    <td>{t.plans[plan.id]} {plan.price}</td>
+                    <td>{t.plans[plan.id]}{plan.price ? ` ${plan.price}` : ` · ${t.free}`}</td>
                     <td>{plan.rpd.toLocaleString('en-US')}</td>
                     <td>{plan.rpm}</td>
                     <td>{plan.maxTokens.toLocaleString('en-US')}</td>

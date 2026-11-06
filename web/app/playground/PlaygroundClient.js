@@ -108,6 +108,12 @@ export default function PlaygroundClient({ baseUrl }) {
     if (response.status === 403) {
       setPhase('error');
       setError('origin');
+      setUpgradeUrl(safeHttpUrl(data && data.upgrade_url));
+      return;
+    }
+    if (response.status === 405) {
+      setPhase('error');
+      setError('method');
       return;
     }
     if (response.status === 429) {
@@ -132,16 +138,19 @@ export default function PlaygroundClient({ baseUrl }) {
 
   const showReply = phase === 'typing' || phase === 'done';
   const showCta = showReply || error !== null;
-  const ctaHref = error === 'limit' && upgradeUrl ? upgradeUrl : BUY_URL;
+  const usesUpgrade = error === 'limit' || error === 'origin';
+  const ctaHref = usesUpgrade && upgradeUrl ? upgradeUrl : BUY_URL;
   const errorText = error === 'bad'
     ? t.e400
     : error === 'limit'
       ? t.e429
       : error === 'origin'
         ? t.e403
-        : error === 'network'
-          ? t.network
-          : t.unavailable;
+        : error === 'method'
+          ? t.e405
+          : error === 'network'
+            ? t.network
+            : t.unavailable;
 
   return (
     <div className="play" dir={dir} lang={lang}>
@@ -204,6 +213,7 @@ export default function PlaygroundClient({ baseUrl }) {
           {showCta ? (
             <div className="play-actions">
               <a className="play-cta" href={ctaHref}>{t.cta}</a>
+              <a className="play-trial" href="https://t.me/N3mak_bot" target="_blank" rel="noreferrer">{t.trialLink}</a>
               <a className="play-docs" href="/docs">{t.docs}</a>
             </div>
           ) : null}

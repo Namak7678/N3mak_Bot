@@ -3,6 +3,13 @@ export const AUTH_HEADER = 'Authorization: Bearer n3k_...';
 
 export const PLANS = [
   {
+    id: 'trial',
+    rpd: 20,
+    rpm: 5,
+    maxTokens: 1024,
+    models: ['gpt-oss-20b'],
+  },
+  {
     id: 'pioneer',
     price: '$3',
     rpd: 200,
@@ -116,10 +123,15 @@ const shared = {
     e429: 'The request is over your plan’s per-minute or per-day limit.',
     e400: 'A body that is not JSON, or a chat request without messages, returns 400.',
     plans: {
+      trial: 'Trial',
       pioneer: 'Pioneer',
       starter: 'Starter',
       pro: 'Pro',
     },
+    free: 'Free',
+    trialHowBefore: 'Trial is free for 24 hours. In Telegram, open',
+    trialHowMid: 'and send',
+    trialHowAfter: '. It uses gpt-oss-20b only, allows 20 requests a day and 5 a minute, caps output at 1,024 tokens, and is limited to one trial per Telegram user.',
     copy: 'Copy',
     copied: 'Copied',
   },
@@ -190,10 +202,15 @@ const shared = {
     e429: 'الطلب تجاوز حد الدقيقة أو حد اليوم لخطتك.',
     e400: 'جسم ليس JSON، أو طلب محادثة بلا messages، يعيد 400.',
     plans: {
+      trial: 'تجربة',
       pioneer: 'Pioneer',
       starter: 'Starter',
       pro: 'Pro',
     },
+    free: 'مجاني',
+    trialHowBefore: 'التجربة مجانية لـ 24 ساعة. في تيليجرام افتح',
+    trialHowMid: 'وأرسل',
+    trialHowAfter: '. تشمل gpt-oss-20b فقط، وتسمح بـ 20 طلباً في اليوم و5 في الدقيقة، وحد الرد 1,024 رمزاً، ومرة واحدة لكل مستخدم تيليجرام.',
     copy: 'نسخ',
     copied: 'تم النسخ',
   },

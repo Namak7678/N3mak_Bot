@@ -490,4 +490,4 @@ footer a { color: var(--teal); text-decoration: none; }
   padding: 14px 22px;
   border-radius: 12px;
 }
-.play-docs { color: #93C5FD; font-weight: 700; }
+.play-docs, .play-trial { color: #93C5FD; font-weight: 700; }

@@ -5,7 +5,7 @@ const BOT = 'https://t.me/N3mak_bot';
 
 export const metadata = {
   title: 'N3mak AI Gateway — Pioneer $3',
-  description: 'Multi-model AI gateway via OmniRoute. Key delivered via @N3mak_bot within a few hours.',
+  description: 'Multi-model AI gateway. Key delivered via @N3mak_bot within a few hours.',
 };
 
 export default function HomePage() {
@@ -15,7 +15,7 @@ export default function HomePage() {
         <div style={{background:'#0F1B2D',border:'2px solid #F5C451',borderRadius:20,padding:32}}>
           <h1 style={{fontSize:'2rem',margin:'0 0 12px'}}>N3mak AI Gateway</h1>
           <p style={{color:'#CBD5E1',lineHeight:1.6}}>
-            بوابة نماذج AI متعددة عبر OmniRoute — يصلك المفتاح عبر @N3mak_bot خلال ساعات قليلة بعد الدفع على Whop.
+            بوابة نماذج AI متعددة — يصلك المفتاح عبر @N3mak_bot خلال ساعات قليلة بعد الدفع على Whop.
           </p>
           <div style={{display:'inline-block',background:'#F5C451',color:'#1A1203',fontWeight:800,fontSize:'1.6rem',padding:'8px 18px',borderRadius:12,margin:'16px 0'}}>
             Pioneer $3
@@ -27,6 +27,11 @@ export default function HomePage() {
             Promo <b>FIRST9</b> — $3 off Starter · Bot <a href={BOT} style={{color:'#93C5FD'}}>@N3mak_bot</a> → /buy
           </p>
           <a href={BOT} style={btn('#1E293B','#fff',true)}>تيليجرام @N3mak_bot</a>
+          <p style={{textAlign:'center',marginTop:18}}>
+            <a href="/playground" style={{color:'#93C5FD'}}>جرّب النموذج · Playground</a>
+            {' · '}
+            <a href="/docs" style={{color:'#93C5FD'}}>توثيق API · API docs</a>
+          </p>
         </div>
       </div>
     </main>

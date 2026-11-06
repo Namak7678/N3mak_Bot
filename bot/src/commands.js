@@ -2,6 +2,7 @@ const { upsertUser, getBalance, creditReferralBonus, getPlatformRevenue } = requ
 const { formatMarketSnapshot } = require('./markets');
 const { isConfigured: stripeConfigured, createDepositSession, DEPOSIT_AMOUNTS_USD } = require('./payments');
 const starsPayments = require('./starsPayments');
+const blueprints = require('./blueprints');
 const whop = require('./whop');
 const { chat: llmChat, isEnabled: llmEnabled } = require('./llm');
 const trialGw = require('./trial/gateway');
@@ -95,6 +96,7 @@ function welcomeText(firstName, balance) {
     starter +
     `\n📌 <b>ابدأ خلال دقيقة</b>\n` +
     `0️⃣ /trial — جرّب مجاناً 24 ساعة (20 طلب/يوم)\n` +
+    `📘 /pack — حزمة المخططات 450⭐\n` +
     `1️⃣ /buy — اشترِ البوابة عبر Whop\n` +
     `2️⃣ /deposit_stars — إيداع بنجوم تيليجرام\n` +
     `3️⃣ /ask — جرّب الذكاء مباشرة\n\n` +
@@ -140,6 +142,7 @@ function helpText() {
     `━━━━━━━━━━━━━━━━\n` +
     `/start — القائمة الرئيسية\n` +
     `/trial — تجربة مجانية 24 ساعة (gpt-oss-20b، 20 طلب/يوم)\n` +
+    `/pack — حزمة 10 مخططات أتمتة (450⭐)\n` +
     `/buy أو /pricing — شراء بوابة AI عبر Whop $${whop.priceUsd()}\n` +
     `/deposit — شحن المحفظة (Whop + Stars${stripeConfigured() ? ' + Stripe' : ''})\n` +
     `/deposit_stars — دفع بنجوم تيليجرام فقط\n` +
@@ -150,7 +153,7 @@ function helpText() {
     `/referral — رابط الدعوة (+$1)\n` +
     `/support — الدعم\n` +
     `/help — هذه القائمة\n\n` +
-    `<i>EN:</i> /trial · /buy · /deposit · /deposit_stars · /portfolio · /ask · /support`
+    `<i>EN:</i> /trial · /pack · /buy · /deposit · /deposit_stars · /portfolio · /ask · /support`
   );
 }
 
@@ -403,6 +406,52 @@ function registerCommands(bot) {
       link_preview_options: { is_disabled: true },
       reply_markup: paymentMenuKeyboard(),
     });
+  });
+
+
+  async function showBlueprintsCatalog(ctx) {
+    if (!blueprints.isConfigured()) {
+      await ctx.reply('⭐ Stars invoices offline (missing bot token).');
+      return;
+    }
+    const lines = blueprints.listPlans().map(
+      (p) => `• <b>${p.key}</b> — ${p.stars}⭐ — ${escapeHtml(p.title)}`
+    );
+    await ctx.reply(
+      ['📘 <b>كتالوج المخططات / Blueprints</b>', ...lines, '', 'اضغط الزر لفاتورة نجوم تيليجرام (XTR).', '<i>EN:</i> 450⭐ PDF pack + monthly plans via Telegram Stars.'].join('\n'),
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📘 الحزمة — 450⭐', callback_data: 'blueprint:pack' }],
+            [
+              { text: 'أساسي — 300⭐', callback_data: 'blueprint:basic' },
+              { text: 'برو — 900⭐', callback_data: 'blueprint:pro' },
+            ],
+          ],
+        },
+      }
+    );
+  }
+
+  bot.command(['pack', 'blueprints', 'product'], async (ctx) => {
+    await showBlueprintsCatalog(ctx);
+  });
+
+  bot.action('menu:blueprints', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    await showBlueprintsCatalog(ctx);
+  });
+
+  bot.action(/^blueprint:(pack|basic|pro)$/, async (ctx) => {
+    const key = ctx.match[1];
+    await ctx.answerCbQuery().catch(() => {});
+    try {
+      await blueprints.sendPlanInvoice(bot, ctx.chat.id, key);
+    } catch (err) {
+      console.error('[blueprints] sendInvoice failed:', err.message);
+      await ctx.reply('تعذر إنشاء فاتورة النجوم. جرّب لاحقاً أو /support.\nCould not create Stars invoice.');
+    }
   });
 
   bot.command('deposit_stars', async (ctx) => {

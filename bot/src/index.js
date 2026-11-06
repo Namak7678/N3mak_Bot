@@ -8,6 +8,7 @@ const { startScheduledPosts } = require('./scheduler');
 const { startTrialNudges } = require('./trial/nudge');
 const { verifyWebhookEvent } = require('./payments');
 const starsPayments = require('./starsPayments');
+const blueprints = require('./blueprints');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3010;
@@ -53,19 +54,33 @@ registerCommands(bot);
 bot.on('pre_checkout_query', async (ctx) => {
   try {
     const q = ctx.preCheckoutQuery;
+    if (q.currency !== 'XTR') {
+      await ctx.answerPreCheckoutQuery(false, 'Only Telegram Stars (XTR) are accepted.');
+      return;
+    }
+    const bp = blueprints.parsePayload(q.invoice_payload);
+    if (bp) {
+      const expected = bp.plan.stars;
+      if (Number(q.total_amount) !== Number(expected)) {
+        console.error('[blueprints] pre_checkout amount mismatch', q.total_amount, expected);
+        await ctx.answerPreCheckoutQuery(false, 'Invalid blueprint invoice. Try /pack again.');
+        return;
+      }
+      await ctx.answerPreCheckoutQuery(true);
+      return;
+    }
     const parsed = starsPayments.parsePayload(q.invoice_payload);
     const okTier =
       parsed &&
       starsPayments.findTierByUsd(parsed.usd) &&
-      Number(parsed.telegramId) === Number(q.from.id) &&
-      q.currency === 'XTR';
+      Number(parsed.telegramId) === Number(q.from.id);
     if (!okTier) {
       console.error('[stars] rejecting pre_checkout:', {
         payload: q.invoice_payload,
         currency: q.currency,
         from: q.from?.id,
       });
-      await ctx.answerPreCheckoutQuery(false, 'Invalid Stars deposit. Please try /deposit_stars again.');
+      await ctx.answerPreCheckoutQuery(false, 'Invalid Stars payment. Try /deposit_stars or /pack.');
       return;
     }
     await ctx.answerPreCheckoutQuery(true);
@@ -85,10 +100,25 @@ bot.on('successful_payment', async (ctx) => {
       console.warn('[stars] ignoring non-XTR successful_payment:', payment.currency);
       return;
     }
+
+    const bp = blueprints.parsePayload(payment.invoice_payload);
+    if (bp) {
+      const chargeId = payment.telegram_payment_charge_id || payment.provider_payment_charge_id || '';
+      const expected = bp.plan.stars;
+      if (Number(payment.total_amount) !== Number(expected)) {
+        console.error('[blueprints] amount mismatch on successful_payment', payment.total_amount, expected);
+        await ctx.reply('Payment received but amount did not match the blueprint plan. Contact /support.');
+        return;
+      }
+      console.log('[blueprints] delivering', bp.key, 'charge', chargeId, 'to', ctx.chat?.id);
+      await blueprints.deliver(bot, ctx.chat.id, bp.key);
+      return;
+    }
+
     const parsed = starsPayments.parsePayload(payment.invoice_payload);
     if (!parsed) {
       console.error('[stars] bad invoice_payload on successful_payment:', payment.invoice_payload);
-      await ctx.reply('Payment received but could not map to a deposit tier. Contact /support with your receipt.');
+      await ctx.reply('Payment received but could not map to a product. Contact /support with your receipt.');
       return;
     }
     const telegramId = parsed.telegramId || ctx.from.id;
@@ -112,8 +142,8 @@ bot.on('successful_payment', async (ctx) => {
       await ctx.reply('✅ This Stars payment was already credited. Use /portfolio to check your balance.');
     }
   } catch (err) {
-    console.error('[stars] successful_payment credit failed:', err.message);
-    await ctx.reply('Payment received but wallet credit failed. Contact /support — we will fix it using your Telegram receipt.');
+    console.error('[stars] successful_payment handler failed:', err.message);
+    await ctx.reply('Payment received but fulfillment failed. Contact /support — we will fix it using your Telegram receipt.');
   }
 });
 

@@ -198,18 +198,39 @@ if (PUBLIC_URL) {
 // service is never marked crashed just because a dependency is slow/down.
 
 // Whop payment fulfillment (membership activated)
+// Requires WHOP_WEBHOOK_SECRET (Standard Webhooks). Rejects unsigned/forged requests with 401.
 try {
   const { fulfillMembership, isAllowedPlan } = require('./fulfillment/whopFulfill');
+  const { verifyWhopSignature } = require('./fulfillment/whopVerify');
   app.post('/webhooks/whop', express.raw({ type: '*/*' }), async (req, res) => {
+    const raw = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}), 'utf8');
+    let verified;
     try {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString('utf8')) : req.body);
+      verified = verifyWhopSignature(raw, req.headers, process.env.WHOP_WEBHOOK_SECRET);
+    } catch (verr) {
+      console.error('[whop] signature rejected:', verr.code || '', verr.message);
+      return res.status(verr.status || 401).json({
+        ok: false,
+        error: verr.code || 'WHOP_SIG_REJECTED',
+        message: verr.message,
+      });
+    }
+    try {
+      const body = JSON.parse(raw.toString('utf8'));
       const action = body?.action || body?.type || '';
       const data = body?.data || body;
-      const planId = data?.plan_id || data?.plan?.id || '';
+      const planId = data?.plan_id || data?.plan?.id || data?.plan || '';
       const membershipId = data?.id || data?.membership_id || data?.membership?.id;
       if (!membershipId) return res.status(200).json({ ok: true, skipped: 'no membership' });
       if (planId && !isAllowedPlan(planId)) {
         return res.status(200).json({ ok: true, skipped: 'other plan', planId });
+      }
+      // Only fulfill activation / payment success style events when type is present
+      const t = String(action || '');
+      if (t && !/(membership\.activated|payment\.succeeded|membership_activated)/i.test(t) && !data?.plan_id && !data?.membership_id) {
+        // still allow legacy payloads that omit type but include membership id
       }
       const email = data?.email || data?.user?.email || null;
       const telegramId = Number(data?.metadata?.telegram_id || data?.telegram_id) || null;
@@ -218,8 +239,13 @@ try {
         email,
         telegramId,
         planId,
+        webhookId: verified.webhookId,
         sendTelegram: telegramId ? (id, msg) => bot.telegram.sendMessage(id, msg) : undefined,
       });
+      if (result.duplicate || result.skipped) {
+        console.log('[whop] deduped/skipped', membershipId, result.reason);
+        return res.json({ ok: true, membershipId, skipped: result.reason || true, duplicate: !!result.duplicate });
+      }
       console.log('[whop] fulfilled', membershipId, result.file);
       res.json({ ok: true, membershipId });
     } catch (err) {
@@ -227,7 +253,10 @@ try {
       res.status(200).json({ ok: false, error: err.message });
     }
   });
-  console.log('[whop] fulfillment webhook mounted at POST /webhooks/whop');
+  if (!process.env.WHOP_WEBHOOK_SECRET) {
+    console.warn('[whop] WHOP_WEBHOOK_SECRET is empty — all webhooks will be rejected with 401 until set from Whop dashboard');
+  }
+  console.log('[whop] fulfillment webhook mounted at POST /webhooks/whop (signature required)');
 } catch (e) {
   console.warn('[whop] fulfill mount skipped:', e.message);
 }

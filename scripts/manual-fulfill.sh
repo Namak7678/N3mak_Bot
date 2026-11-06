@@ -6,7 +6,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BOT_ENV="$ROOT/bot/.env"
 MINT="$ROOT/bot/src/fulfillment/mint_omni_key.py"
 OMNI_BASE="${OMNIROUTE_ADMIN_BASE_URL:-http://127.0.0.1:20128}"
-PUBLIC_V1="${OMNIROUTE_PUBLIC_BASE_URL:-${OPENAI_BASE_URL:-http://127.0.0.1:20128/v1}}"
+# Prefer public HTTPS base for buyer messages; never tell buyers 127.0.0.1 if a public URL exists.
+if [[ -n "${OMNIROUTE_PUBLIC_BASE_URL:-}" && ! "$OMNIROUTE_PUBLIC_BASE_URL" =~ 127\.0\.0\.1|localhost ]]; then
+  PUBLIC_V1="$OMNIROUTE_PUBLIC_BASE_URL"
+else
+  PUBLIC_V1="${OMNIROUTE_PUBLIC_BASE_URL:-${OPENAI_BASE_URL:-http://127.0.0.1:20128/v1}}"
+fi
 
 TG_ID="${1:-}"
 PLAN_ARG="$(echo "${2:-pioneer}" | tr '[:upper:]' '[:lower:]')"
@@ -48,7 +53,7 @@ if [[ "$IS_TEST" -eq 1 ]]; then
   LABEL="test-manual-$(date -u +%Y%m%d)-${PLAN_ARG}"
 fi
 
-MINT_JSON="$(python3 "$MINT" "$LABEL")"
+MINT_JSON="$(python3 "$MINT" "$LABEL" "$PLAN_ID")"
 KEY="$(printf '%s' "$MINT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["key"])')"
 KEY_ID="$(printf '%s' "$MINT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 VIA="$(printf '%s' "$MINT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("via","sqlite"))')"

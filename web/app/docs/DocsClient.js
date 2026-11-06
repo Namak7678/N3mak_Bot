@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { AUTH_HEADER, DEFAULT_MODEL, ERRORS, PLANS, copy } from './copy';
+import { toolGuides } from './tools';
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -104,6 +105,7 @@ export default function DocsClient({ baseUrl }) {
   const t = copy[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const examples = useMemo(() => examplesFor(baseUrl), [baseUrl]);
+  const tools = useMemo(() => toolGuides(baseUrl), [baseUrl]);
 
   return (
     <div className="docs" dir={dir} lang={lang}>
@@ -236,6 +238,44 @@ export default function DocsClient({ baseUrl }) {
               </div>
               <pre className="docs-code"><code>{example.code}</code></pre>
             </article>
+          ))}
+        </section>
+
+        <section id="tools">
+          <h2>{t.toolsTitle}</h2>
+          <p className="docs-sub">
+            {t.toolsLeadBefore}{' '}
+            <code className="docs-inline" dir="ltr">{DEFAULT_MODEL}</code>{' '}
+            {t.toolsLeadAfter}
+          </p>
+          {tools.map((tool) => (
+            <details key={tool.id} className="data-card docs-tool">
+              <summary>{tool.name}</summary>
+              <ol>
+                {tool.steps[lang].map((parts, stepIndex) => (
+                  <li key={`${tool.id}-${stepIndex}`}>
+                    {parts.map((part, partIndex) => (
+                      part.code
+                        ? <code key={partIndex} className="docs-inline" dir="ltr">{part.code}</code>
+                        : <span key={partIndex}>{part.text}</span>
+                    ))}
+                  </li>
+                ))}
+              </ol>
+              {tool.code ? (
+                <div className="docs-example">
+                  <div className="docs-example-head">
+                    <h3>{tool.name}</h3>
+                    <CopyButton text={tool.code} label={t.copy} copiedLabel={t.copied} />
+                  </div>
+                  <pre className="docs-code"><code>{tool.code}</code></pre>
+                </div>
+              ) : null}
+              <p className="docs-note"><strong>{t.toolCaveat}.</strong> {tool.caveat[lang]}</p>
+              <p className="docs-tool-doc">
+                <a href={tool.docHref} target="_blank" rel="noreferrer">{t.toolDocs}</a>
+              </p>
+            </details>
           ))}
         </section>
 

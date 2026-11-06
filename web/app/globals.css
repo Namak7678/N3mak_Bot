@@ -408,6 +408,12 @@ footer a { color: var(--teal); text-decoration: none; }
   direction: ltr;
 }
 .docs-note { color: #9FB0C3; line-height: 1.7; margin: 8px 0 16px; }
+.docs-tool { margin-bottom: 12px; }
+.docs-tool summary { cursor: pointer; color: #fff; font-weight: 700; }
+.docs-tool ol { color: #C6D2E0; line-height: 1.7; margin: 14px 0; padding-inline-start: 1.25rem; }
+.docs-tool li { margin: 8px 0; }
+.docs-tool-doc { margin: 0; }
+.docs-tool-doc a { color: var(--teal); }
 @media (max-width: 720px) {
   .docs-top { flex-direction: column; align-items: stretch; }
 }

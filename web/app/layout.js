@@ -10,6 +10,15 @@ export default function RootLayout({ children }) {
     <html lang="ar" dir="rtl">
       <body style={{ margin: 0, fontFamily: 'system-ui, Tahoma, Arial, sans-serif', background: '#0B1220', color: '#fff' }}>
         {children}
+        <footer>
+          <div className="wrap">
+            <a href="/">N3mak</a>
+            {' · '}
+            <a href="/docs">API docs · توثيق الواجهة</a>
+            {' · '}
+            <a href="https://t.me/N3mak_bot" target="_blank" rel="noreferrer">@N3mak_bot</a>
+          </div>
+        </footer>
       </body>
     </html>
   );

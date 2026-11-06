@@ -27,6 +27,9 @@ export default function HomePage() {
             Promo <b>FIRST9</b> — $3 off Starter · Bot <a href={BOT} style={{color:'#93C5FD'}}>@N3mak_bot</a> → /buy
           </p>
           <a href={BOT} style={btn('#1E293B','#fff',true)}>تيليجرام @N3mak_bot</a>
+          <p style={{textAlign:'center',marginTop:18}}>
+            <a href="/docs" style={{color:'#93C5FD'}}>توثيق API · API docs</a>
+          </p>
         </div>
       </div>
     </main>

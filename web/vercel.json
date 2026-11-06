@@ -1,5 +1,11 @@
 {
   "rewrites": [
     { "source": "/", "destination": "/buy.html" }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true
+    }
+  }
 }

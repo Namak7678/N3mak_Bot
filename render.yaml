@@ -1,0 +1,77 @@
+# Render Blueprint — one-click: https://render.com/deploy?repo=https://github.com/Namak7678/N3mak_Bot
+# After deploy with Telegram polling: stop any other polling copy of the bot (box) to avoid Telegram 409.
+services:
+  - type: web
+    name: n3mak-bot
+    runtime: node
+    rootDir: bot
+    buildCommand: npm ci || npm install
+    startCommand: node src/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OWNER_TELEGRAM_ID
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: n3mak-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: n3mak-redis
+          type: keyvalue
+          property: connectionString
+      - key: PUBLIC_URL
+        sync: false
+      - key: WHOP_WEBHOOK_URL
+        sync: false
+      - key: WHOP_PIONEER_CHECKOUT_URL
+        value: https://whop.com/checkout/plan_n2uiwphhI5YG7
+      - key: WHOP_CHECKOUT_URL
+        value: https://whop.com/checkout/plan_IkWmnOwW1ShYY
+      - key: WHOP_PRO_CHECKOUT_URL
+        value: https://whop.com/checkout/plan_SrqGnbkktuOUc
+      - key: WHOP_PIONEER_PLAN_ID
+        value: plan_n2uiwphhI5YG7
+      - key: WHOP_PLAN_ID
+        value: plan_IkWmnOwW1ShYY
+      - key: WHOP_PRO_PLAN_ID
+        value: plan_SrqGnbkktuOUc
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: cfp/openai/gpt-oss-20b
+      - key: OMNIROUTE_PUBLIC_BASE_URL
+        sync: false
+      - key: OMNIROUTE_ADMIN_BASE_URL
+        sync: false
+      - key: OMNIROUTE_MANAGE_API_KEY
+        sync: false
+      - key: OMNIROUTE_API_KEY_SECRET
+        sync: false
+      - key: OMNIROUTE_SQLITE_PATH
+        sync: false
+      - key: FULFILL_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+
+  - type: keyvalue
+    name: n3mak-redis
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+  - name: n3mak-postgres
+    plan: free
+    databaseName: n3mak
+    user: n3mak

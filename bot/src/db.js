@@ -82,7 +82,7 @@ async function creditDeposit(telegramId, amountUsd, stripeSessionId) {
       }
     }
     await client.query('COMMIT');
-    return { fee, credited };
+    return { fee, credited, applied: inserted.rowCount > 0 };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

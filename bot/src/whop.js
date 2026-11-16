@@ -15,7 +15,7 @@ function buildCheckoutUrl(envName, planId) {
   if (!configured) return fallback;
   try {
     const url = new URL(configured);
-    if (url.protocol !== 'https:' || !/(^|\\.)whop\\.com$/i.test(url.hostname)) return fallback;
+    if (url.protocol !== 'https:' || !/(^|\.)whop\.com$/i.test(url.hostname)) return fallback;
     return url.toString();
   } catch {
     return fallback;

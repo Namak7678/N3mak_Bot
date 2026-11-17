@@ -69,12 +69,8 @@ bot.on('pre_checkout_query', async (ctx) => {
       await ctx.answerPreCheckoutQuery(true);
       return;
     }
-    const parsed = starsPayments.parsePayload(q.invoice_payload);
-    const okTier =
-      parsed &&
-      starsPayments.findTierByUsd(parsed.usd) &&
-      Number(parsed.telegramId) === Number(q.from.id);
-    if (!okTier) {
+    const validPayment = starsPayments.validatePayment(q.invoice_payload, q.from.id, q.total_amount);
+    if (!validPayment) {
       console.error('[stars] rejecting pre_checkout:', {
         payload: q.invoice_payload,
         currency: q.currency,
@@ -115,13 +111,13 @@ bot.on('successful_payment', async (ctx) => {
       return;
     }
 
-    const parsed = starsPayments.parsePayload(payment.invoice_payload);
+    const parsed = starsPayments.validatePayment(payment.invoice_payload, ctx.from.id, payment.total_amount);
     if (!parsed) {
-      console.error('[stars] bad invoice_payload on successful_payment:', payment.invoice_payload);
-      await ctx.reply('Payment received but could not map to a product. Contact /support with your receipt.');
+      console.error('[stars] invalid Stars payload, payer, or amount:', payment.invoice_payload, payment.total_amount);
+      await ctx.reply('Payment received but the payer or amount did not match the invoice. Contact /support with your receipt.');
       return;
     }
-    const telegramId = parsed.telegramId || ctx.from.id;
+    const telegramId = parsed.telegramId;
     const amountUsd = parsed.usd;
     const chargeId = payment.telegram_payment_charge_id || payment.provider_payment_charge_id;
     if (!chargeId) {

@@ -133,6 +133,7 @@ function startScheduledPosts(bot) {
         disable_web_page_preview: false,
         reply_markup: {
           inline_keyboard: [
+            [{ text: '📡 JOIN N3MAK RADAR24', url: 'https://t.me/n3makradar24' }],
             [{ text: '🌐 Open Radar24 Dashboard', url: RADAR_SITE }],
             [{ text: '📤 Share Radar24', url: 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Fn3makradar24&text=Follow%20N3mak%20Radar24%20for%20global%20cyber%20threat%20intelligence' }],
           ],

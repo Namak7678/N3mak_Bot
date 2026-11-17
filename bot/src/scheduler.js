@@ -43,7 +43,6 @@ function countryName(code) {
 
 function buildSnapshotPost(snapshot) {
   const top = snapshot.countries.slice(0, 5);
-  const total = snapshot.countries.reduce((sum, item) => sum + Number(item.victims), 0);
   const lines = top.map((item, index) =>
     `${index + 1}. ${countryName(item.country)} — ${Number(item.victims)} listings`
   );
@@ -51,7 +50,7 @@ function buildSnapshotPost(snapshot) {
     '🌍 N3mak Radar24 | GLOBAL EXPOSURE BRIEF',
     `Updated: ${updatedLabel(snapshot.updated)}`,
     '',
-    `The current public index tracks ${total} listings across ${snapshot.countries.length} countries.`,
+    `Top countries by public listing count (${snapshot.countries.length} countries tracked):`,
     ...lines,
     '',
     'Important: these figures reflect entries in public ransomware leak-site sources. They are not independent confirmation of an intrusion or proof that a network was compromised.',

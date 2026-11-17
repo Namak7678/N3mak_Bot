@@ -159,8 +159,12 @@ function helpText() {
 
 function registerCommands(bot) {
   bot.start(async (ctx) => {
-    const payload = ctx.startPayload;
-    const referredBy = payload ? Number(payload) : null;
+    const payload = String(ctx.startPayload || '').trim();
+    const isRadarEntry = ['radar', 'radar_page'].includes(payload.toLowerCase());
+    const parsedReferral = /^\d+$/.test(payload) ? Number(payload) : null;
+    const referredBy = Number.isSafeInteger(parsedReferral) && parsedReferral > 0
+      ? parsedReferral
+      : null;
     let isNewUser = false;
     try {
       isNewUser = await upsertUser(ctx.from, referredBy);
@@ -174,12 +178,33 @@ function registerCommands(bot) {
         await ctx.telegram
           .sendMessage(
             referredBy,
-            `🎉 انضم شخص عبر رابطك! تم إضافة مكافأة $1 إلى محفظتك.\nSomeone joined via your referral — $1 credited.`
+            \`🎉 انضم شخص عبر رابطك! تم إضافة مكافأة $1 إلى محفظتك.\\nSomeone joined via your referral — $1 credited.\`
           )
           .catch(() => {});
       } catch (err) {
         console.error('[referral] bonus credit failed (non-fatal):', err.message);
       }
+    }
+
+    if (isRadarEntry) {
+      await ctx.reply(
+        '🌍 <b>N3mak Radar24</b>\\n' +
+        'Global Cyber Threat Intelligence — متابعة مشهد التهديدات السيبرانية حول العالم.\\n\\n' +
+        '📡 انضم إلى القناة لمشاهدة التنبيهات والتحديثات: <a href="https://t.me/n3makradar24">N3mak Radar24</a>\\n' +
+        'English: Follow the channel for global cyber threat updates and exposure intelligence.',
+        {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📡 Join N3mak Radar24', url: 'https://t.me/n3makradar24' }],
+              [{ text: '🌐 Open Radar Website', url: 'https://namak7678.github.io/n3mak-radar/' }],
+              [{ text: '📤 Share the Channel', url: 'https://t.me/share/url?url=https%3A%2F%2Ft.me%2Fn3makradar24&text=Follow%20N3mak%20Radar24%20for%20global%20cyber%20threat%20intelligence' }]
+            ]
+          }
+        }
+      );
+      return;
     }
 
     const balance = await safeBalance(ctx.from.id);

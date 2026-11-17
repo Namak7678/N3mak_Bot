@@ -123,7 +123,7 @@ function startScheduledPosts(bot) {
       } catch (err) {
         console.error('[radar] snapshot unavailable; using evergreen security post:', err.message);
       }
-      const builder = POST_BUILDERS[cursor % POST_BUILDERS.length];
+      const builder = snapshot ? POST_BUILDERS[cursor % POST_BUILDERS.length] : POST_BUILDERS[2];
       cursor += 1;
       const text = builder(snapshot);
       await bot.telegram.sendMessage(channelId, text, {

@@ -32,9 +32,8 @@ function formatBalanceAr(balance) {
 function paymentMenuKeyboard() {
   const rows = [];
   if (whop.isConfigured()) {
-    rows.push([{ text: `⚡ Starter $${whop.starterPriceUsd()}`, url: whop.starterCheckoutUrl() }]);
-  rows.push([{ text: `⚡ Whop $${whop.priceUsd()} Starter`, url: whop.checkoutUrl() }]);
-    rows.push([{ text: `💎 Whop $${whop.proPriceUsd()} Pro`, url: whop.proCheckoutUrl() }]);
+    rows.push([{ text: `⚡ Starter ${whop.starterPriceUsd()}`, url: whop.starterCheckoutUrl() }]);
+    rows.push([{ text: `💎 Whop ${whop.proPriceUsd()} Pro`, url: whop.proCheckoutUrl() }]);
   }
   if (starsPayments.isConfigured()) {
     rows.push(

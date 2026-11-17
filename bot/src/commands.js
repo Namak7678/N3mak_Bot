@@ -178,7 +178,7 @@ function registerCommands(bot) {
         await ctx.telegram
           .sendMessage(
             referredBy,
-            \`🎉 انضم شخص عبر رابطك! تم إضافة مكافأة $1 إلى محفظتك.\\nSomeone joined via your referral — $1 credited.\`
+            `🎉 انضم شخص عبر رابطك! تم إضافة مكافأة $1 إلى محفظتك.\nSomeone joined via your referral — $1 credited.`
           )
           .catch(() => {});
       } catch (err) {
@@ -188,9 +188,9 @@ function registerCommands(bot) {
 
     if (isRadarEntry) {
       await ctx.reply(
-        '🌍 <b>N3mak Radar24</b>\\n' +
-        'Global Cyber Threat Intelligence — متابعة مشهد التهديدات السيبرانية حول العالم.\\n\\n' +
-        '📡 انضم إلى القناة لمشاهدة التنبيهات والتحديثات: <a href="https://t.me/n3makradar24">N3mak Radar24</a>\\n' +
+        '🌍 <b>N3mak Radar24</b>\n' +
+        'Global Cyber Threat Intelligence — متابعة مشهد التهديدات السيبرانية حول العالم.\n\n' +
+        '📡 انضم إلى القناة لمشاهدة التنبيهات والتحديثات: <a href="https://t.me/n3makradar24">N3mak Radar24</a>\n' +
         'English: Follow the channel for global cyber threat updates and exposure intelligence.',
         {
           parse_mode: 'HTML',

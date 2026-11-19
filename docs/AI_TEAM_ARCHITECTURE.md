@@ -65,11 +65,16 @@ Start with CEO, CTO, Research, Growth and QA only. Add the remaining roles after
 - No new paid service or duplicate bot/repository is introduced.
 - Tests and a rollback path are documented before enabling production traffic.
 
-## Candidate projects — evaluation notes
+## Candidate projects — verified shortlist
 
-- **Paperclip** is the management/control plane candidate.
-- **jingsiqian/synapse** advertises a broad desktop/web/mobile and Telegram multi-agent experience under Apache-2.0; treat advertised platform support as unverified until installation and device tests pass.
-- **zai-org/Synapse** is a separate project and currently describes itself as early design/implementation; it requires Docker, PostgreSQL and Redis and is not the first choice for the current low-memory Windows laptop.
+See [AI_TEAM_CANDIDATE_EVALUATION.md](AI_TEAM_CANDIDATE_EVALUATION.md) for the comparison and verification limits.
+
+- **Paperclip** (MIT): primary management/control-plane candidate. Its README documents bring-your-own agents, organization/task management, approvals, permissions and cost tracking. It is not itself the LLM runtime.
+- **MindRoom** (Apache-2.0): optional phone-first agent/chat candidate. Its README lists an iPhone/iPad app and Telegram through Matrix bridges; the existing N3mak bot integration still requires a proof-of-concept.
+- **OpenAgents Workspace** (Apache-2.0): Windows-first collaborative workspace/agent launcher alternative; not selected for phase 1.
+- **Synkora** (MIT): secondary self-hosted multi-channel candidate; verify resource footprint and claims before adoption.
+- **jingsiqian/synapse** is a fork; the upstream project referenced by its README could not be verified during this review. Do not use it as a production foundation until provenance is resolved.
+- **OriNachum/golem** is a fork and its README describes a separate Telegram bot per agent, conflicting with the one-existing-bot requirement. Do not use in phase 1.
 - Do not install multiple competing orchestration platforms at once. Evaluate one runtime at a time.
 
 ## Current implementation boundary

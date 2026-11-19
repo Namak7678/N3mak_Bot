@@ -6,6 +6,7 @@ const { checkRateLimit } = require('./redis');
 const { registerCommands } = require('./commands');
 const { startScheduledPosts } = require('./scheduler');
 const { startTrialNudges } = require('./trial/nudge');
+const { startHqReporter } = require('./hq-reporter'); // D14: 09:00/20:00 UTC into topics
 const { verifyWebhookEvent } = require('./payments');
 const starsPayments = require('./starsPayments');
 const blueprints = require('./blueprints');
@@ -33,8 +34,8 @@ bot.use(async (ctx, next) => {
 });
 
 // Rate limiting middleware (anti-flood) — fails OPEN: if Redis is
-// down or slow, we let the message through rather than blocking every
-// command in the bot on an infrastructure hiccup.
+// down, slow, or simply not configured, we let the message through rather
+// than blocking every command in the bot on an infrastructure hiccup.
 bot.use(async (ctx, next) => {
   if (ctx.from) {
     try {
@@ -149,6 +150,7 @@ bot.on('successful_payment', async (ctx) => {
 
 startScheduledPosts(bot);
 startTrialNudges(bot);
+startHqReporter(bot); // D14: enabled only when TOPIC_IDS + OPERATIONS_GROUP_ID are set
 
 const app = express();
 app.use(express.static(require('path').join(__dirname, '..', 'public')));

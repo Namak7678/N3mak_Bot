@@ -1,53 +1,99 @@
-const TASK_PREFERENCES = Object.freeze({
-  general: ['gpt-oss-20b', 'llama-3.1-8b', 'mistral-small-3.1-24b', 'gpt-oss-120b', 'llama-3.3-70b'],
-  chat: ['gpt-oss-20b', 'llama-3.1-8b', 'mistral-small-3.1-24b'],
-  research: ['gpt-oss-120b', 'llama-3.3-70b', 'gpt-oss-20b', 'llama-3.1-8b'],
-  code: ['qwen2.5-coder-32b', 'gpt-oss-120b', 'gpt-oss-20b', 'llama-3.1-8b', 'mistral-small-3.1-24b', 'llama-3.3-70b'],
-  analysis: ['gpt-oss-120b', 'llama-3.3-70b', 'gpt-oss-20b', 'llama-3.1-8b'],
-  writing: ['mistral-small-3.1-24b', 'gpt-oss-20b', 'llama-3.1-8b'],
-  support: ['llama-3.1-8b', 'gpt-oss-20b', 'mistral-small-3.1-24b'],
-  review: ['gpt-oss-120b', 'llama-3.3-70b', 'gpt-oss-20b'],
-});
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+const OPENROUTER_MODEL = 'openrouter/free';
+const TIMEOUT_MS = 12000;
 
-export const SUPPORTED_AI_TASKS = Object.freeze(Object.keys(TASK_PREFERENCES));
-
-export function selectModelCandidates({
-  requestedModel,
-  task,
-  allowedModels = [],
-  defaultModel = 'gpt-oss-20b',
-} = {}) {
-  const hasTask = task !== undefined && task !== null && String(task).trim() !== '';
-  const normalizedTask = hasTask ? String(task).trim().toLowerCase() : 'general';
-  if (!TASK_PREFERENCES[normalizedTask]) {
-    throw new RangeError(`Unsupported AI task: ${normalizedTask}`);
-  }
-
-  if (requestedModel && requestedModel !== 'auto' && requestedModel !== 'n3mak/auto') {
-    return [String(requestedModel)];
-  }
-
-  if (!hasTask && !requestedModel) return [defaultModel];
-
-  const allowed = new Set(allowedModels);
-  const preferred = TASK_PREFERENCES[normalizedTask].filter((model) => allowed.has(model));
-  const remaining = allowedModels.filter((model) => !preferred.includes(model));
-  const candidates = [...preferred, ...remaining];
-  return candidates.length ? candidates : [defaultModel];
+function normalizeMessages(messages) {
+  return messages.map((message) => ({
+    role: String(message.role || 'user'),
+    content: Array.isArray(message.content)
+      ? message.content.map((part) => typeof part.text === 'string' ? part.text : '').join('')
+      : String(message.content ?? ''),
+  }));
 }
 
-export async function runWithFallback(candidates, runModel) {
-  let lastError = null;
-  for (const model of candidates.slice(0, 2)) {
+async function readJson(response) {
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(`provider_http_${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  if (!payload || typeof payload !== 'object') throw new Error('provider_invalid_json');
+  return payload;
+}
+
+async function callOpenRouter(env, messages, maxTokens, fetchImpl) {
+  const response = await fetchImpl('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ model: OPENROUTER_MODEL, messages, max_tokens: maxTokens }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const payload = await readJson(response);
+  const text = payload.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) throw new Error('provider_empty_response');
+  return { text, provider: 'openrouter', model: OPENROUTER_MODEL };
+}
+
+async function callGemini(env, messages, maxTokens, fetchImpl) {
+  const system = messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n');
+  const contents = messages.filter((message) => message.role !== 'system').map((message) => ({
+    role: message.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: message.content }],
+  }));
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: {
+      'x-goog-api-key': env.GEMINI_API_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+      contents,
+      generationConfig: { maxOutputTokens: maxTokens },
+    }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const payload = await readJson(response);
+  const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('');
+  if (typeof text !== 'string' || !text.trim()) throw new Error('provider_empty_response');
+  return { text, provider: 'gemini', model: GEMINI_MODEL };
+}
+
+export async function runFreeAI({ env = {}, messages, maxTokens = 1024, fetchImpl = fetch } = {}) {
+  if (!Array.isArray(messages) || messages.length === 0) throw new TypeError('messages_required');
+  const normalized = normalizeMessages(messages);
+  const limit = Math.max(1, Math.min(Number(maxTokens) || 1024, 4096));
+  const providers = [];
+  if (typeof env.OPENROUTER_API_KEY === 'string' && env.OPENROUTER_API_KEY.trim()) {
+    providers.push(() => callOpenRouter(env, normalized, limit, fetchImpl));
+  }
+  // Operator must confirm the Google Cloud project has billing disabled.
+  if (env.GEMINI_FREE_TIER_NO_BILLING === 'true' && typeof env.GEMINI_API_KEY === 'string' && env.GEMINI_API_KEY.trim()) {
+    providers.push(() => callGemini(env, normalized, limit, fetchImpl));
+  }
+  if (!providers.length) {
+    const error = new Error('no_verified_free_provider_configured');
+    error.code = 'free_ai_unavailable';
+    throw error;
+  }
+
+  let lastError;
+  for (const call of providers) {
     try {
-      const result = await runModel(model);
-      if (!result || typeof result.text !== 'string' || !result.text.trim()) {
-        throw new Error('empty model response');
-      }
-      return { model, result, error: null };
+      return await call();
     } catch (error) {
       lastError = error;
     }
   }
-  return { model: null, result: null, error: lastError || new Error('no eligible model candidates') };
+  const error = new Error('all_free_providers_unavailable');
+  error.code = 'free_ai_unavailable';
+  error.cause = lastError;
+  throw error;
 }
+
+export const FREE_AI_MODELS = Object.freeze({ openrouter: OPENROUTER_MODEL, gemini: GEMINI_MODEL });

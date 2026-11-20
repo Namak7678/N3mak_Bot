@@ -1,5 +1,7 @@
 const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const OPENROUTER_MODEL = 'openrouter/free';
+const OVH_MODEL = 'gpt-oss-20b';
+const OVH_BASE = 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1';
 const TIMEOUT_MS = 12000;
 
 function normalizeMessages(messages) {
@@ -39,7 +41,7 @@ async function callOpenRouter(env, messages, maxTokens, fetchImpl) {
 }
 
 async function callGemini(env, messages, maxTokens, fetchImpl) {
-  const system = messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n');
+  const system = messages.filter((message) => message.role === 'system').map((message) => message.content).join('\\n');
   const contents = messages.filter((message) => message.role !== 'system').map((message) => ({
     role: message.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: message.content }],
@@ -64,6 +66,19 @@ async function callGemini(env, messages, maxTokens, fetchImpl) {
   return { text, provider: 'gemini', model: GEMINI_MODEL };
 }
 
+async function callOVHAnonymous(messages, maxTokens, fetchImpl) {
+  const response = await fetchImpl(`${OVH_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ model: OVH_MODEL, messages, max_tokens: maxTokens }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const payload = await readJson(response);
+  const text = payload.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) throw new Error('provider_empty_response');
+  return { text, provider: 'ovh-anonymous', model: OVH_MODEL };
+}
+
 export async function runFreeAI({ env = {}, messages, maxTokens = 1024, fetchImpl = fetch } = {}) {
   if (!Array.isArray(messages) || messages.length === 0) throw new TypeError('messages_required');
   const normalized = normalizeMessages(messages);
@@ -76,11 +91,8 @@ export async function runFreeAI({ env = {}, messages, maxTokens = 1024, fetchImp
   if (env.GEMINI_FREE_TIER_NO_BILLING === 'true' && typeof env.GEMINI_API_KEY === 'string' && env.GEMINI_API_KEY.trim()) {
     providers.push(() => callGemini(env, normalized, limit, fetchImpl));
   }
-  if (!providers.length) {
-    const error = new Error('no_verified_free_provider_configured');
-    error.code = 'free_ai_unavailable';
-    throw error;
-  }
+  // Always available as the no-key free fallback; OVH enforces 2 req/min/IP/model.
+  providers.push(() => callOVHAnonymous(normalized, limit, fetchImpl));
 
   let lastError;
   for (const call of providers) {
@@ -96,4 +108,8 @@ export async function runFreeAI({ env = {}, messages, maxTokens = 1024, fetchImp
   throw error;
 }
 
-export const FREE_AI_MODELS = Object.freeze({ openrouter: OPENROUTER_MODEL, gemini: GEMINI_MODEL });
+export const FREE_AI_MODELS = Object.freeze({
+  openrouter: OPENROUTER_MODEL,
+  gemini: GEMINI_MODEL,
+  ovh: OVH_MODEL,
+});

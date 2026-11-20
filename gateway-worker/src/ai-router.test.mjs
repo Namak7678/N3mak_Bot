@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectModelCandidates } from './ai-router.mjs';
+import { selectModelCandidates, runWithFallback } from './ai-router.mjs';
 
 const allModels = [
   'gpt-oss-20b',

@@ -42,3 +42,32 @@ test('auto model uses task preferences and unknown tasks are rejected', () => {
     { name: 'RangeError' }
   );
 });
+
+test('fallback runner tries one backup after a primary failure', async () => {
+  const calls = [];
+  const outcome = await runWithFallback(['primary', 'backup', 'third'], async (model) => {
+    calls.push(model);
+    if (model === 'primary') throw new Error('unavailable');
+    return { text: 'answer' };
+  });
+  assert.deepEqual(calls, ['primary', 'backup']);
+  assert.deepEqual(outcome, { model: 'backup', result: { text: 'answer' }, error: null });
+});
+
+test('fallback runner treats an empty response as a failed attempt', async () => {
+  const calls = [];
+  const outcome = await runWithFallback(['primary', 'backup'], async (model) => {
+    calls.push(model);
+    return model === 'primary' ? { text: '  ' } : { text: 'recovered' };
+  });
+  assert.deepEqual(calls, ['primary', 'backup']);
+  assert.equal(outcome.model, 'backup');
+  assert.equal(outcome.result.text, 'recovered');
+});
+
+test('fallback runner returns unavailable after both allowed attempts fail', async () => {
+  const outcome = await runWithFallback(['primary', 'backup'], async () => { throw new Error('offline'); });
+  assert.equal(outcome.model, null);
+  assert.equal(outcome.result, null);
+  assert.equal(outcome.error.message, 'offline');
+});

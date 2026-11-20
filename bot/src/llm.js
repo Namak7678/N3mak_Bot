@@ -23,7 +23,7 @@ async function chat(messages, { model = MODEL, max_tokens = 256, task } = {}) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${KEY}`,
     },
-    body: JSON.stringify({ model, messages, max_tokens, ...(task ? { task } : {}) }),
+    body: JSON.stringify({ model, messages, max_tokens, ...(task && (model === 'auto' || model === 'n3mak/auto') ? { task } : {}) }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {

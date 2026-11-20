@@ -64,3 +64,21 @@ test('fails closed when every configured free provider is unavailable', async ()
 test('exports only the two pinned free route model IDs', () => {
   assert.deepEqual(FREE_AI_MODELS, { openrouter: 'openrouter/free', gemini: 'gemini-3.1-flash-lite' });
 });
+
+
+test('falls through to OVH anonymous route after keyed free providers fail', async () => {
+  const calls = [];
+  const result = await runFreeAI({
+    env: { OPENROUTER_API_KEY: 'test-key' },
+    messages: [{ role: 'user', content: 'hello' }],
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      if (calls.length === 1) return fail(429);
+      return ok({ choices: [{ message: { content: 'OVH fallback answer' } }] });
+    },
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].url, 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions');
+  assert.equal(calls[1].init.headers.authorization, undefined);
+  assert.equal(result.provider, 'ovh-anonymous');
+});

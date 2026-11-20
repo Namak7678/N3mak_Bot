@@ -56,4 +56,4 @@ Cerebras and Groq remain disabled until account-level free eligibility is verifi
 
 ## Current implementation boundary
 
-PR #20 currently implements task-aware selection and a two-attempt fallback over the existing Cloudflare Workers AI model list. It does not yet call Gemini, OpenRouter, Groq, or Cerebras. It is not an unlimited-free system and is not deployed.
+PR #20 now contains two separate paths: the existing buyer gateway's tier-safe Workers AI router, and a new internal-only free route using OpenRouter `openrouter/free` followed by Gemini `gemini-3.1-flash-lite` only when an operator attests that the Google project has billing disabled. The internal route is disabled by default, requires a dedicated service token, and returns 503 rather than using a paid fallback. It is not yet deployed, enabled, connected to the Telegram bot, or live-tested against provider accounts. Groq and Cerebras remain excluded until no-charge account eligibility is proven.

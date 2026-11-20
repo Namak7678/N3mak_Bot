@@ -9,7 +9,12 @@ Public OpenAI-compatible gateway for N3mak buyers. No dependency on the box.
 - `POST /admin/mint` `{plan, membership_id?, telegram_id?, email?, test?, notify?}` — plans: `pioneer|starter|pro|trial`
 - `POST /admin/revoke` `{key|key_id|membership_id}` or `{telegram_id, plan:"trial"}`
 - `GET /admin/trials/nudge-pending` / `POST /admin/trials/nudge-mark` — for bot expiry nudges
-- Storage: D1 `n3mak-gateway`. Models: Workers AI.\n- `POST /v1/chat/completions` accepts optional task routing: `general|chat|research|code|analysis|writing|support|review`.\n- Use `model: n3mak/auto` to select a task-appropriate model. The response's `model` field identifies the actual model used.\n- Auto routing is restricted to the caller's existing plan allow-list and tries at most two Workers AI models (primary plus one fallback). Explicit model IDs retain existing behavior.\n- `GET /v1/models` advertises `n3mak/auto`.\n- No external provider API or paid third-party model is called by this router. Workers AI usage remains subject to Cloudflare account allowances, quotas, and billing terms; unlimited zero-cost inference is not guaranteed.
+- Storage: D1 `n3mak-gateway`. Models: Workers AI.
+- `POST /v1/chat/completions` accepts optional task routing: `general|chat|research|code|analysis|writing|support|review`.
+- Use `model: n3mak/auto` to select a task-appropriate model. The response's `model` field identifies the actual model used.
+- Auto routing is restricted to the caller's existing plan allow-list and tries at most two Workers AI models (primary plus one fallback). Explicit model IDs retain existing behavior.
+- `GET /v1/models` advertises `n3mak/auto`.
+- No external provider API or paid third-party model is called by this router. Workers AI usage remains subject to Cloudflare account allowances, quotas, and billing terms; unlimited zero-cost inference is not guaranteed.
 
 | Plan | RPD | RPM | Models | Notes |
 |------|-----|-----|--------|-------|

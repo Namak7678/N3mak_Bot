@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "gateway-worker/**"
+      - "bot/**"
       - ".github/workflows/n3mak-gateway-checks.yml"
   push:
     branches:
@@ -11,6 +12,7 @@ on:
       - "feat/n3mak-free-ai-router"
     paths:
       - "gateway-worker/**"
+      - "bot/**"
       - ".github/workflows/n3mak-gateway-checks.yml"
 
 permissions:

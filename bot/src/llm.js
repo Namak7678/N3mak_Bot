@@ -68,7 +68,7 @@ async function chat(messages, { model = MODEL, max_tokens = 256, task } = {}) {
     messages,
     max_tokens,
     { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
-    model === 'auto' || model === 'n3mak/auto' ? model : model,
+    model,
   );
 }
 

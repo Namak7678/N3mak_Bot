@@ -1,6 +1,6 @@
 # Free AI Intelligence & Agent Integration (FreeLLMArena)
 
-Status: architecture decision / implementation guide. This document does not claim that a live provider integration or deployment has been completed.
+Status: implementation in progress on branch `feat/n3mak-free-ai-router`. Task-aware routing, tier-safe model selection, bounded fallback, and Telegram client task metadata are implemented in code. Production deployment and live Cloudflare verification have not been performed.
 
 ## Decision
 
@@ -162,3 +162,13 @@ Only add variables after matching them to the actual gateway implementation. Do 
 - Agent comparison and stated runtime capabilities: https://freellmarena.com/always-on-agents
 - Widget installation: https://freellmarena.com/embed
 - Privacy and data handling: https://freellmarena.com/privacy
+
+
+## Current implementation record
+
+- `gateway-worker/src/ai-router.mjs`: task preferences, tier-filtered model candidate selection, and a two-attempt fallback runner.
+- `gateway-worker/src/worker.js`: accepts `task`, advertises `n3mak/auto`, applies the existing plan allow-list, and returns the actual selected model.
+- `gateway-worker/src/ai-router.test.mjs`: tests task ordering, tier restrictions, explicit model preservation, invalid tasks, bounded fallback, and empty-response recovery.
+- `bot/src/llm.js` and `bot/src/commands.js`: can pass a task hint when configured with `OPENAI_MODEL=n3mak/auto`.
+- The existing bot's default OmniRoute model remains unchanged. To route the bot through the N3mak gateway, configure its base URL and a dedicated gateway service key in the server's secret environment. No key is included in this repository.
+- This branch has not been deployed. Existing customer traffic and pricing have not been changed.

@@ -371,7 +371,7 @@ async function handleChat(req, env, ctx, row) {
       { id, object: 'chat.completion.chunk', created, model: selectedModelId, choices: [{ index: 0, delta: { role: 'assistant', content: result.text }, finish_reason: null }] },
       { id, object: 'chat.completion.chunk', created, model: selectedModelId, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
     ];
-    const sse = chunks.map((c) => `data: ${JSON.stringify(c)}\\n\\n`).join('') + 'data: [DONE]\\n\\n';
+    const sse = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n';
     return new Response(sse, { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'access-control-allow-origin': '*' } });
   }
   return json({
@@ -509,7 +509,7 @@ function deliveryText({ key, plan, membershipId, base, test }) {
     `Models: ${t.models.join(', ')}\n` +
     `Limits: ${t.rpd}/day, ${t.rpm}/min\n\n` +
     `Example:\n` +
-    `curl ${base}/chat/completions \\\n  -H "Authorization: Bearer ${key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}'\n\n` +
+    `curl ${base}/chat/completions \\n  -H "Authorization: Bearer ${key}" \\n  -H "Content-Type: application/json" \\n  -d '{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}'\n\n` +
     (membershipId ? `Membership: ${membershipId}\n` : '') +
     `استخدمها مع أي OpenAI-compatible client. الدعم: @N3mak_bot — للترقية: /buy`
   );

@@ -35,3 +35,7 @@ export function selectModelCandidates({
   const candidates = [...preferred, ...remaining];
   return candidates.length ? candidates : [defaultModel];
 }
+
+export async function runWithFallback() {
+  return null;
+}

@@ -1,7 +1,8 @@
 /**
  * OpenAI-compatible client for N3mak.
- * Prefer the dedicated internal Free AI route when explicitly enabled.
- * Never fall back from that route to a paid/legacy provider after an error.
+ * Priority: explicitly enabled internal Free AI route, then the existing
+ * Cloudflare Workers AI demo allowance, then configured legacy route.
+ * Free routes fail closed and never fall back to a paid provider.
  */
 const BASE = (process.env.OPENAI_BASE_URL || '').replace(/\/$/, '');
 const KEY = process.env.OPENAI_API_KEY || 'n3mak-local';
@@ -9,9 +10,11 @@ const MODEL = process.env.OPENAI_MODEL || 'cfp/openai/gpt-oss-20b';
 const FREE_BASE = (process.env.N3MAK_FREE_AI_BASE_URL || '').replace(/\/$/, '');
 const FREE_KEY = process.env.N3MAK_FREE_AI_TOKEN || '';
 const FREE_ENABLED = process.env.N3MAK_FREE_AI_ENABLED === 'true' && Boolean(FREE_BASE && FREE_KEY);
+const CF_DEMO_BASE = (process.env.N3MAK_CF_DEMO_BASE_URL || 'https://n3mak-gateway.n3mak.workers.dev/v1/demo').replace(/\/$/, '');
+const CF_DEMO_ENABLED = process.env.N3MAK_CF_DEMO_ENABLED === 'true';
 
 function isEnabled() {
-  return FREE_ENABLED || Boolean(BASE);
+  return FREE_ENABLED || CF_DEMO_ENABLED || Boolean(BASE);
 }
 
 async function chat(messages, { model = MODEL, max_tokens = 256, task } = {}) {
@@ -29,6 +32,25 @@ async function chat(messages, { model = MODEL, max_tokens = 256, task } = {}) {
       throw err;
     }
     return body.choices?.[0]?.message?.content ?? '';
+  }
+
+  if (CF_DEMO_ENABLED) {
+    const userMessage = [...messages].reverse().find((message) => message.role === 'user');
+    const prompt = String(userMessage?.content ?? '').slice(0, 500);
+    if (!prompt.trim()) throw new Error('CF demo requires a user prompt');
+    const res = await fetch(`${CF_DEMO_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(body?.error || `N3mak Cloudflare Free AI HTTP ${res.status}`);
+      err.status = res.status;
+      err.body = body;
+      throw err;
+    }
+    return typeof body.reply === 'string' ? body.reply : '';
   }
 
   if (!BASE) {

@@ -115,9 +115,9 @@ Set `N3MAK_FREE_AI_ENABLED=true` as a Worker variable. Set `GEMINI_FREE_TIER_NO_
 Example:
 
 ```bash
-curl -sS https://n3mak-gateway.n3mak.workers.dev/v1/internal/free/chat/completions \\
-  -H 'Authorization: Bearer YOUR_INTERNAL_FREE_AI_TOKEN' \\
-  -H 'Content-Type: application/json' \\
+curl -sS https://n3mak-gateway.n3mak.workers.dev/v1/internal/free/chat/completions \
+  -H 'Authorization: Bearer YOUR_INTERNAL_FREE_AI_TOKEN' \
+  -H 'Content-Type: application/json' \
   -d '{"messages":[{"role":"user","content":"Summarize N3mak in one sentence."}],"max_tokens":256}'
 ```
 

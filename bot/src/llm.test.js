@@ -67,3 +67,68 @@ test('SARA does not fall back to the legacy provider when Free AI is unavailable
   }
 });
 
+
+
+test('SARA uses the existing Cloudflare Workers AI demo route when enabled', async () => {
+  const names = ['N3MAK_CF_DEMO_ENABLED', 'N3MAK_CF_DEMO_BASE_URL', 'N3MAK_FREE_AI_ENABLED', 'N3MAK_FREE_AI_BASE_URL', 'N3MAK_FREE_AI_TOKEN', 'OPENAI_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_MODEL'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.N3MAK_CF_DEMO_ENABLED = 'true';
+    process.env.N3MAK_CF_DEMO_BASE_URL = 'https://n3mak-gateway.n3mak.workers.dev/v1/demo';
+    process.env.N3MAK_FREE_AI_ENABLED = 'false';
+    process.env.OPENAI_BASE_URL = 'https://legacy.example/v1';
+    process.env.OPENAI_API_KEY = 'legacy-secret';
+    delete require.cache[require.resolve('./llm')];
+    const client = require('./llm');
+    let request;
+    global.fetch = async (url, options) => {
+      request = { url, options };
+      return { ok: true, json: async () => ({ reply: 'N3mak Free AI is responding.' }) };
+    };
+    const answer = await client.chat([
+      { role: 'system', content: 'System instructions' },
+      { role: 'user', content: 'هل تعمل سارة؟' },
+    ]);
+    assert.equal(answer, 'N3mak Free AI is responding.');
+    assert.equal(request.url, 'https://n3mak-gateway.n3mak.workers.dev/v1/demo/chat');
+    assert.equal(request.options.headers.Authorization, undefined);
+    assert.deepEqual(JSON.parse(request.options.body), { prompt: 'هل تعمل سارة؟' });
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+    delete require.cache[require.resolve('./llm')];
+  }
+});
+
+test('SARA fails closed on Cloudflare Free AI errors without paid fallback', async () => {
+  const names = ['N3MAK_CF_DEMO_ENABLED', 'N3MAK_CF_DEMO_BASE_URL', 'N3MAK_FREE_AI_ENABLED', 'N3MAK_FREE_AI_BASE_URL', 'N3MAK_FREE_AI_TOKEN', 'OPENAI_BASE_URL', 'OPENAI_API_KEY'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.N3MAK_CF_DEMO_ENABLED = 'true';
+    process.env.N3MAK_CF_DEMO_BASE_URL = 'https://n3mak-gateway.n3mak.workers.dev/v1/demo';
+    process.env.N3MAK_FREE_AI_ENABLED = 'false';
+    process.env.OPENAI_BASE_URL = 'https://legacy.example/v1';
+    process.env.OPENAI_API_KEY = 'legacy-secret';
+    delete require.cache[require.resolve('./llm')];
+    const client = require('./llm');
+    const requests = [];
+    global.fetch = async (url) => {
+      requests.push(url);
+      return { ok: false, status: 429, json: async () => ({ error: 'demo rate limit' }) };
+    };
+    await assert.rejects(() => client.chat([{ role: 'user', content: 'test' }]), /demo rate limit/);
+    assert.deepEqual(requests, ['https://n3mak-gateway.n3mak.workers.dev/v1/demo/chat']);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+    delete require.cache[require.resolve('./llm')];
+  }
+});

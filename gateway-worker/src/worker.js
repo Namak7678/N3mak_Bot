@@ -1,4 +1,5 @@
 import { selectModelCandidates, runWithFallback, SUPPORTED_AI_TASKS } from './ai-router.mjs';
+import { runFreeAI } from './free-ai-router.mjs';
 
 /**
  * n3mak-gateway — public OpenAI-compatible gateway for N3mak buyers.
@@ -720,6 +721,39 @@ async function handleNudgeMark(req, env) {
   return json({ ok: true, marked: res.meta ? res.meta.changes : 0 });
 }
 
+async function handleInternalFreeAI(req, env) {
+  if (env.N3MAK_FREE_AI_ENABLED !== 'true') return json({ error: 'free AI route disabled' }, 404);
+  const expected = env.N3MAK_FREE_AI_TOKEN;
+  const supplied = bearer(req);
+  if (!expected || !timingSafeEqualStr(supplied, expected)) {
+    return oaiError(401, 'Invalid internal service token', 'invalid_request_error', 'invalid_api_key');
+  }
+  let body;
+  try {
+    body = await req.json();
+  } catch (_) {
+    return oaiError(400, 'Invalid JSON body');
+  }
+  if (!Array.isArray(body.messages) || !body.messages.length) return oaiError(400, '`messages` is required');
+  try {
+    const result = await runFreeAI({
+      env,
+      messages: body.messages,
+      maxTokens: body.max_tokens || body.max_completion_tokens || 1024,
+    });
+    return json({
+      id: 'chatcmpl-' + randHex(12),
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model: `n3mak/free/${result.provider}/${result.model}`,
+      choices: [{ index: 0, message: { role: 'assistant', content: result.text }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
+  } catch (_) {
+    return oaiError(503, 'All configured free AI providers are unavailable. No paid fallback was attempted.', 'api_error', 'free_ai_unavailable');
+  }
+}
+
 function authGate(req, env, row) {
   if (!row) {
     return oaiError(401, 'Invalid or missing API key. Use: Authorization: Bearer <your N3mak key>', 'invalid_request_error', 'invalid_api_key');
@@ -774,6 +808,8 @@ export default {
       if (p === '/webhooks/whop' && req.method === 'POST') return await handleWhop(req, env);
 
       if (p === '/v1/demo/chat') return await handleDemoChat(req, env, ctx);
+
+      if (p === '/v1/internal/free/chat/completions' && req.method === 'POST') return await handleInternalFreeAI(req, env);
 
       if (p.startsWith('/admin/')) {
         if (!isAdmin(req, env)) return json({ ok: false, error: 'unauthorized' }, 401);

@@ -37,3 +37,32 @@ test('SARA uses the dedicated N3mak Free AI endpoint when explicitly enabled', a
     delete require.cache[require.resolve('./llm')];
   }
 });
+
+test('SARA does not fall back to the legacy provider when Free AI is unavailable', async () => {
+  const names = ['N3MAK_FREE_AI_ENABLED', 'N3MAK_FREE_AI_BASE_URL', 'N3MAK_FREE_AI_TOKEN', 'OPENAI_BASE_URL', 'OPENAI_API_KEY', 'OPENAI_MODEL'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.N3MAK_FREE_AI_ENABLED = 'true';
+    process.env.N3MAK_FREE_AI_BASE_URL = 'https://n3mak-gateway.n3mak.workers.dev/v1/internal/free';
+    process.env.N3MAK_FREE_AI_TOKEN = 'test-internal-token';
+    process.env.OPENAI_BASE_URL = 'https://legacy-provider.example/v1';
+    process.env.OPENAI_API_KEY = 'legacy-key';
+    delete require.cache[require.resolve('./llm')];
+    const client = require('./llm');
+    const requests = [];
+    global.fetch = async (url) => {
+      requests.push(url);
+      return { ok: false, status: 503, json: async () => ({ error: { message: 'free_ai_unavailable' } }) };
+    };
+    await assert.rejects(() => client.chat([{ role: 'user', content: 'Test failure path' }]), /free_ai_unavailable/);
+    assert.deepEqual(requests, ['https://n3mak-gateway.n3mak.workers.dev/v1/internal/free/chat/completions']);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+    delete require.cache[require.resolve('./llm')];
+  }
+});

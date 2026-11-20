@@ -53,3 +53,28 @@ curl -sS https://n3mak-gateway.n3mak.workers.dev/v1/demo/chat \
 ```
 
 Deploy: upload Worker with AI + D1 bindings via Cloudflare API / wrangler. Schema: `schema.sql` (+ ALTER for existing DBs: `expires_at`, `nudged_at`, `limit_hit_at`, `key_plain`).
+
+## N3mak Free AI routing
+
+Example auto-routed coding request:
+
+```bash
+curl -sS https://n3mak-gateway.n3mak.workers.dev/v1/chat/completions \
+  -H 'Authorization: Bearer n3k_YOUR_SERVICE_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "n3mak/auto",
+    "task": "code",
+    "messages": [{"role":"user","content":"Review this JavaScript function for bugs."}],
+    "max_tokens": 1024
+  }'
+```
+
+Supported task preferences:
+- `general`, `chat`: low-latency general conversation
+- `research`, `analysis`, `review`: reasoning-oriented model order
+- `code`: coding model first
+- `writing`: writing-oriented model first
+- `support`: lightweight support model first
+
+The caller's plan still controls which models are eligible. A trial account can only use its existing trial model; task routing never grants access to higher-tier models. Use a dedicated service key stored as a secret for server-to-server bot integration. Do not put an API key in browser code or commit it to Git.

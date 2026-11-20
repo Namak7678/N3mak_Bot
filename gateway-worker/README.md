@@ -108,7 +108,6 @@ wrangler secret put N3MAK_FREE_AI_TOKEN
 wrangler secret put OPENROUTER_API_KEY
 # Optional, only for a Google project with billing disabled:
 wrangler secret put GEMINI_API_KEY
-wrangler secret put GEMINI_FREE_TIER_NO_BILLING
 ```
 
 Set `N3MAK_FREE_AI_ENABLED=true` as a Worker variable. Set `GEMINI_FREE_TIER_NO_BILLING=true` as a variable only after confirming the Google project has no billing account. Do not expose the internal token to browser clients. Do not use this route for confidential customer, payment, or personal data; OpenRouter and Gemini free-tier data policies apply.

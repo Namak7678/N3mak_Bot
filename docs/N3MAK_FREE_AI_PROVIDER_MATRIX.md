@@ -1,62 +1,59 @@
 # N3mak Free AI — Verified Free Provider Plan
 
-Status: provider research completed; external provider adapters are not yet enabled in production. This document is the acceptance gate for the next implementation phase.
+Status: provider research completed. External provider adapters are not yet enabled. This document separates documented free routes from providers whose account-level free access still needs verification.
 
 ## Non-negotiable free-only rules
 
-- No paid model IDs, no prepaid credits, no automatic upgrade, no paid fallback.
-- Treat provider quota exhaustion (429), billing-required responses, missing credentials, and unknown model IDs as provider unavailable; move only to another explicitly free route.
-- Never send a request to an endpoint unless its selected model/provider is marked free in the registry.
-- Keep provider keys in Cloudflare Worker secrets or the existing bot host's secret manager. Never commit keys or paste them into chat.
+- No paid model IDs, prepaid credits, automatic upgrades, or paid fallbacks.
+- Quota exhaustion (429), billing-required responses, missing credentials, and unknown model IDs mean that provider is unavailable.
+- Never call an endpoint unless its exact model route is explicitly classified as free.
+- Keep provider keys in the existing host's secret manager. Never commit keys or paste them into chat.
 - Do not send customer secrets, payment data, personal data, or confidential business documents to free consumer API tiers.
-- Do not treat free quotas as guaranteed uptime or unlimited capacity.
-- Cloudflare Workers AI is excluded from strict free-only fallback unless the account has a hard zero-spend/billing guard verified by the owner. Its current binding may incur charges beyond included allowances.
-- Existing customer plan entitlements and paid product routing must remain unchanged. Internal N3mak free mode must be a separate, explicit route.
+- Free quotas are limited and can change; they are not guaranteed uptime or unlimited capacity.
+- Exclude Cloudflare Workers AI from strict free-only routing unless a hard zero-spend billing guard is verified for the account. The existing binding may incur charges beyond included allowances.
+- Do not alter customer plan entitlements or paid product routing. Internal N3mak Free AI must be a separate, explicitly enabled route.
 
-## Provider shortlist (checked 2026-11-20)
+## Provider assessment (checked 2026-11-20)
 
-| Priority | Provider | Verified free route | Best use | Limits / risk |
-|---|---|---|---|---|
-| 1 | Google Gemini API | Free tier explicitly lists free input/output for selected models; current pricing page lists Gemini 3.1 Flash-Lite Preview as free | General assistant, Arabic/English drafting, lightweight analysis | Preview models can change; free-tier prompts may be used to improve Google products; quotas vary by model/account. No paid fallback. |
-| 2 | Groq | Free-plan limits are exposed in official console docs; currently listed models include openai/gpt-oss-120b, openai/gpt-oss-20b, and qwen/qwen3.8-27b | Fast chat, coding, short analysis | Exact Free Plan limits are account/model-specific; rate-limit headers and 429 must be handled. |
-| 3 | OpenRouter | Free plan lists 25+ free models and 50 requests/day; free model variants are rate-limited | Extra overflow provider and model diversity | Free models are not production-guaranteed. The free route may change; only use model IDs explicitly marked free. |
-| 4 | Cerebras | Official pricing page advertises a $0 Free tier and free API key | High-speed inference candidate | Public pricing/rate-limit documentation is older; verify current model availability and limits in account console before enabling. |
-| 5 | Local Ollama (existing installation) | No per-token API charge; runs on the user's own machine | Offline/private fallback for small tasks | Limited by the existing Windows laptop's RAM/CPU; not a 24/7 cloud service. |
+| Priority | Provider | What official documentation confirms | Decision |
+|---|---|---|---|
+| 1 | OpenRouter Free | Model IDs ending in `:free` are $0 model price; `openrouter/free` automatically selects an eligible free model. Free variants have 20 RPM and 50 RPD limits without a qualifying credit purchase. | First cloud adapter candidate. Hard-code `openrouter/free` only; never allow arbitrary model IDs or paid routing. |
+| 2 | Google Gemini API | The pricing page lists Gemini 3.1 Flash-Lite as free input/output on the Free tier. Free-tier data may be used to improve Google products; quotas vary. | Second cloud adapter candidate. Enable only with a Google AI Studio project that has no billing account attached, so exhaustion cannot switch to paid billing. Confirm the selected model remains Free tier before enabling. |
+| 3 | Cerebras | Official pricing page describes a $0 Free tier with lower rate limits and free API key; the page also lists paid Exploration pricing. | Hold. Do not enable until account dashboard and exact model availability confirm free inference. |
+| 4 | Groq | Official model catalogue lists per-token prices for several production models. A developer/free plan limit is not proof that every listed model is free. | Hold. Do not enable until Groq account explicitly confirms a no-charge model/allowance and hard quota behavior. |
+| 5 | Local Ollama (already installed) | No per-token API charge; runs on the user's own machine. | Local fallback for small tasks only; limited by available RAM/CPU and cannot provide cloud uptime. |
 
 ## Official references
 
+- OpenRouter free models and free request limits: https://openrouter.ai/collections/free-models/
+- OpenRouter pricing: https://openrouter.ai/pricing
+- OpenRouter API keys: https://openrouter.ai/settings/keys
 - Gemini pricing and model-level free-tier status: https://ai.google.dev/gemini-api/docs/pricing
 - Gemini API key setup: https://aistudio.google.com/app/apikey
-- Groq rate limits and Free Plan limits: https://console.groq.com/docs/rate-limits
-- Groq API keys: https://console.groq.com/keys
-- OpenRouter free plan and quotas: https://openrouter.ai/pricing
-- OpenRouter free model catalogue and free-variant limits: https://openrouter.ai/collections/free-models/
-- OpenRouter API keys: https://openrouter.ai/settings/keys
 - Cerebras pricing: https://inference-docs.cerebras.ai/support/pricing
-- Cerebras API keys: https://cloud.cerebras.ai/
+- Groq model catalogue and per-token pricing: https://console.groq.com/docs/models
+- Groq rate limits: https://console.groq.com/docs/rate-limits
 
 ## Proposed internal-only routing order
 
-1. Groq free plan for fast general/code tasks (after checking current account model limits).
-2. Gemini free tier for general reasoning and Arabic/English drafting.
-3. OpenRouter free-only model variants for overflow.
-4. Existing local Ollama for small/private tasks when reachable.
-5. Return a clear unavailable response.
+1. OpenRouter `openrouter/free` (free model router only).
+2. Gemini `gemini-3.1-flash-lite` on a project with billing disabled.
+3. Existing local Ollama for small tasks when reachable.
+4. Return a clear unavailable response.
 
-The order is configurable and should be benchmarked on N3mak Arabic and English prompts. Do not send the same confidential prompt to multiple external providers.
+Cerebras and Groq remain disabled until account-level free eligibility is verified. Benchmark Arabic and English N3mak prompts before promoting any model. Do not fan out confidential prompts to multiple external providers.
 
 ## Implementation contract
 
-- Add a dedicated internal free-only route; do not broaden Pioneer/Starter/Pro model entitlements.
-- Add provider adapters using OpenAI-compatible requests where supported and Gemini's native API format where needed.
-- Add a registry containing provider, model ID, free-tier status, task fit, and enabled flag.
-- Add AI_ALLOW_PAID=false as a hard guard, not merely a preference. Paid model IDs and unverified providers must be rejected before network calls.
-- Add provider-level timeouts, one retry at most, bounded cross-provider fallback, 429 handling, and response normalization.
-- Expose only safe health metadata (enabled provider names and last health status); never expose keys.
+- Add a dedicated internal free-only route; do not broaden Pioneer/Starter/Pro entitlements.
+- Hard-code the allowed free route IDs; do not accept caller-supplied arbitrary provider/model URLs.
+- Add provider adapters, per-provider timeouts, one retry at most, bounded cross-provider fallback, 429 handling, and response normalization.
+- Paid model IDs and unverified providers must be rejected before network calls.
+- Expose only safe health metadata (provider names and status); never expose keys.
 - Add mocked tests for free-only rejection, quota fallback, missing key, timeout, malformed response, and all-providers-down.
-- Require explicit operator approval before adding secrets or changing live bot routing.
-- Do not deploy until the provider keys exist, the provider free tiers are confirmed in the actual accounts, and end-to-end tests pass.
+- Require operator approval before adding secrets or changing live bot routing.
+- Do not deploy until the provider keys exist, free-tier eligibility is confirmed in the actual accounts, and end-to-end tests pass.
 
 ## Current implementation boundary
 
-The existing PR #20 implements task-aware selection and a two-attempt fallback over the existing Cloudflare Workers AI model list. It does not yet call Gemini, Groq, OpenRouter, or Cerebras. This is intentionally not described as an unlimited-free system.
+PR #20 currently implements task-aware selection and a two-attempt fallback over the existing Cloudflare Workers AI model list. It does not yet call Gemini, OpenRouter, Groq, or Cerebras. It is not an unlimited-free system and is not deployed.

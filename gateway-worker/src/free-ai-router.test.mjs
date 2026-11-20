@@ -32,7 +32,7 @@ test('falls back to Gemini only when no-billing attestation and key are present'
     },
   });
   assert.equal(calls.length, 2);
-  assert.match(calls[1].url, /gemini-3\\.1-flash-lite:generateContent/);
+  assert.match(calls[1].url, /gemini-3\.1-flash-lite:generateContent/);
   assert.equal(result.provider, 'gemini');
   assert.equal(result.text, 'gemini answer');
 });

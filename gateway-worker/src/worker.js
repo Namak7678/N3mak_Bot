@@ -1,4 +1,4 @@
-import { selectModelCandidates, SUPPORTED_AI_TASKS } from './ai-router.mjs';
+import { selectModelCandidates, runWithFallback, SUPPORTED_AI_TASKS } from './ai-router.mjs';
 
 /**
  * n3mak-gateway — public OpenAI-compatible gateway for N3mak buyers.
@@ -339,24 +339,13 @@ async function handleChat(req, env, ctx, row) {
     return json(payload, 429, { 'retry-after': String(lim.retry) });
   }
 
-  let result = null;
-  let selectedModelId = null;
-  for (const candidate of candidates) {
-    try {
-      const attempt = await runChat(env, candidate, body, tier);
-      if (!attempt || typeof attempt.text !== 'string' || !attempt.text.trim()) {
-        throw new Error('empty model response');
-      }
-      result = attempt;
-      selectedModelId = candidate;
-      break;
-    } catch (e) {
-      console.warn('[n3mak-ai-router] model attempt failed:', candidate, e && e.message ? e.message : 'unknown');
-    }
-  }
-  if (!result) {
+  const routed = await runWithFallback(candidates, (candidate) => runChat(env, candidate, body, tier));
+  if (!routed.result) {
+    console.warn('[n3mak-ai-router] all eligible model attempts failed:', routed.error && routed.error.message ? routed.error.message : 'unknown');
     return oaiError(502, 'No available model could complete this request. Try again later.', 'api_error', 'models_unavailable');
   }
+  const result = routed.result;
+  const selectedModelId = routed.model;
 
   const id = 'chatcmpl-' + randHex(12);
   const created = Math.floor(Date.now() / 1000);

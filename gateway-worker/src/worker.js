@@ -318,7 +318,7 @@ async function handleChat(req, env, ctx, row) {
     return oaiError(400, `Unsupported AI task. Choose: ${SUPPORTED_AI_TASKS.join(', ')}`, 'invalid_request_error', 'unsupported_task');
   }
 
-  const candidates = requestedCandidates.map(resolveModel).filter((id) => id && tier.models.includes(id));
+  const candidates = requestedCandidates.map(resolveModel).filter((id) => id && tier.models.includes(id)).slice(0, 2);
   if (!candidates.length) {
     const requested = body.model || DEFAULT_MODEL;
     const known = resolveModel(requested);

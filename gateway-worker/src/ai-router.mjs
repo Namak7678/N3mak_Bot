@@ -36,6 +36,18 @@ export function selectModelCandidates({
   return candidates.length ? candidates : [defaultModel];
 }
 
-export async function runWithFallback() {
-  return null;
+export async function runWithFallback(candidates, runModel) {
+  let lastError = null;
+  for (const model of candidates.slice(0, 2)) {
+    try {
+      const result = await runModel(model);
+      if (!result || typeof result.text !== 'string' || !result.text.trim()) {
+        throw new Error('empty model response');
+      }
+      return { model, result, error: null };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  return { model: null, result: null, error: lastError || new Error('no eligible model candidates') };
 }

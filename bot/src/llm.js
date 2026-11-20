@@ -11,7 +11,7 @@ function isEnabled() {
   return Boolean(BASE);
 }
 
-async function chat(messages, { model = MODEL, max_tokens = 256 } = {}) {
+async function chat(messages, { model = MODEL, max_tokens = 256, task } = {}) {
   if (!BASE) {
     const err = new Error('OPENAI_BASE_URL is not set');
     err.code = 'LLM_DISABLED';
@@ -23,7 +23,7 @@ async function chat(messages, { model = MODEL, max_tokens = 256 } = {}) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${KEY}`,
     },
-    body: JSON.stringify({ model, messages, max_tokens }),
+    body: JSON.stringify({ model, messages, max_tokens, ...(task ? { task } : {}) }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {

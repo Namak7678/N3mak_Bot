@@ -660,7 +660,7 @@ function registerCommands(bot) {
           },
           { role: 'user', content: question },
         ],
-        { max_tokens: 256 }
+        { max_tokens: 256, task: 'general' }
       );
       await ctx.reply(answer || 'لا رد من الذكاء الاصطناعي.');
     } catch (err) {

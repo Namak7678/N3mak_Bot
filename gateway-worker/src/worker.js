@@ -1,3 +1,6 @@
+import { selectModelCandidates, runWithFallback, SUPPORTED_AI_TASKS } from './ai-router.mjs';
+import { runFreeAI } from './free-ai-router.mjs';
+
 /**
  * n3mak-gateway — public OpenAI-compatible gateway for N3mak buyers.
  * Runs on Cloudflare Workers (workers.dev), backed by Workers AI + D1.
@@ -303,11 +306,27 @@ async function handleChat(req, env, ctx, row) {
   }
   if (!Array.isArray(body.messages) || !body.messages.length) return oaiError(400, '`messages` is required');
   const tier = TIERS[row.plan] || TIERS.pioneer;
-  const modelId = resolveModel(body.model);
-  if (!modelId) return oaiError(404, `Model not found: ${body.model}. See GET /v1/models`, 'invalid_request_error', 'model_not_found');
-  if (!tier.models.includes(modelId)) {
-    return oaiError(403, `Model ${modelId} is not included in ${tier.label}. Allowed: ${tier.models.join(', ')}`, 'permission_error', 'model_not_allowed');
+
+  let requestedCandidates;
+  try {
+    requestedCandidates = selectModelCandidates({
+      requestedModel: body.model,
+      task: body.task,
+      allowedModels: tier.models,
+      defaultModel: DEFAULT_MODEL,
+    });
+  } catch (e) {
+    return oaiError(400, `Unsupported AI task. Choose: ${SUPPORTED_AI_TASKS.join(', ')}`, 'invalid_request_error', 'unsupported_task');
   }
+
+  const candidates = requestedCandidates.map(resolveModel).filter((id) => id && tier.models.includes(id)).slice(0, 2);
+  if (!candidates.length) {
+    const requested = body.model || DEFAULT_MODEL;
+    const known = resolveModel(requested);
+    if (!known) return oaiError(404, `Model not found: ${requested}. See GET /v1/models`, 'invalid_request_error', 'model_not_found');
+    return oaiError(403, `Model ${known} is not included in ${tier.label}. Allowed: ${tier.models.join(', ')}`, 'permission_error', 'model_not_allowed');
+  }
+
   const lim = await enforceLimits(env, row, ctx);
   if (lim) {
     const payload = {
@@ -321,12 +340,14 @@ async function handleChat(req, env, ctx, row) {
     return json(payload, 429, { 'retry-after': String(lim.retry) });
   }
 
-  let result;
-  try {
-    result = await runChat(env, modelId, body, tier);
-  } catch (e) {
-    return oaiError(502, 'Upstream model error: ' + (e && e.message ? e.message : 'unknown'), 'api_error');
+  const routed = await runWithFallback(candidates, (candidate) => runChat(env, candidate, body, tier));
+  if (!routed.result) {
+    console.warn('[n3mak-ai-router] all eligible model attempts failed:', routed.error && routed.error.message ? routed.error.message : 'unknown');
+    return oaiError(502, 'No available model could complete this request. Try again later.', 'api_error', 'models_unavailable');
   }
+  const result = routed.result;
+  const selectedModelId = routed.model;
+
   const id = 'chatcmpl-' + randHex(12);
   const created = Math.floor(Date.now() / 1000);
   const usage = {
@@ -337,8 +358,8 @@ async function handleChat(req, env, ctx, row) {
 
   if (body.stream) {
     const chunks = [
-      { id, object: 'chat.completion.chunk', created, model: modelId, choices: [{ index: 0, delta: { role: 'assistant', content: result.text }, finish_reason: null }] },
-      { id, object: 'chat.completion.chunk', created, model: modelId, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
+      { id, object: 'chat.completion.chunk', created, model: selectedModelId, choices: [{ index: 0, delta: { role: 'assistant', content: result.text }, finish_reason: null }] },
+      { id, object: 'chat.completion.chunk', created, model: selectedModelId, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] },
     ];
     const sse = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n';
     return new Response(sse, { headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'access-control-allow-origin': '*' } });
@@ -347,7 +368,7 @@ async function handleChat(req, env, ctx, row) {
     id,
     object: 'chat.completion',
     created,
-    model: modelId,
+    model: selectedModelId,
     choices: [{ index: 0, message: { role: 'assistant', content: result.text }, finish_reason: 'stop' }],
     usage,
   });
@@ -478,7 +499,7 @@ function deliveryText({ key, plan, membershipId, base, test }) {
     `Models: ${t.models.join(', ')}\n` +
     `Limits: ${t.rpd}/day, ${t.rpm}/min\n\n` +
     `Example:\n` +
-    `curl ${base}/chat/completions \\\n  -H "Authorization: Bearer ${key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}'\n\n` +
+    `curl ${base}/chat/completions \\n  -H "Authorization: Bearer ${key}" \\n  -H "Content-Type: application/json" \\n  -d '{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}'\n\n` +
     (membershipId ? `Membership: ${membershipId}\n` : '') +
     `استخدمها مع أي OpenAI-compatible client. الدعم: @N3mak_bot — للترقية: /buy`
   );
@@ -700,6 +721,39 @@ async function handleNudgeMark(req, env) {
   return json({ ok: true, marked: res.meta ? res.meta.changes : 0 });
 }
 
+async function handleInternalFreeAI(req, env) {
+  if (env.N3MAK_FREE_AI_ENABLED !== 'true') return json({ error: 'free AI route disabled' }, 404);
+  const expected = env.N3MAK_FREE_AI_TOKEN;
+  const supplied = bearer(req);
+  if (!expected || !timingSafeEqualStr(supplied, expected)) {
+    return oaiError(401, 'Invalid internal service token', 'invalid_request_error', 'invalid_api_key');
+  }
+  let body;
+  try {
+    body = await req.json();
+  } catch (_) {
+    return oaiError(400, 'Invalid JSON body');
+  }
+  if (!Array.isArray(body.messages) || !body.messages.length) return oaiError(400, '`messages` is required');
+  try {
+    const result = await runFreeAI({
+      env,
+      messages: body.messages,
+      maxTokens: body.max_tokens || body.max_completion_tokens || 1024,
+    });
+    return json({
+      id: 'chatcmpl-' + randHex(12),
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model: `n3mak/free/${result.provider}/${result.model}`,
+      choices: [{ index: 0, message: { role: 'assistant', content: result.text }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    });
+  } catch (_) {
+    return oaiError(503, 'All configured free AI providers are unavailable. No paid fallback was attempted.', 'api_error', 'free_ai_unavailable');
+  }
+}
+
 function authGate(req, env, row) {
   if (!row) {
     return oaiError(401, 'Invalid or missing API key. Use: Authorization: Bearer <your N3mak key>', 'invalid_request_error', 'invalid_api_key');
@@ -748,12 +802,14 @@ export default {
           ok: true,
           service: 'n3mak-gateway',
           base_url: baseUrl(env, req),
-          features: { trial: true, demo: true },
+          features: { trial: true, demo: true, task_routing: true, tier_safe_fallback: true, external_paid_providers: false },
         });
       }
       if (p === '/webhooks/whop' && req.method === 'POST') return await handleWhop(req, env);
 
       if (p === '/v1/demo/chat') return await handleDemoChat(req, env, ctx);
+
+      if (p === '/v1/internal/free/chat/completions' && req.method === 'POST') return await handleInternalFreeAI(req, env);
 
       if (p.startsWith('/admin/')) {
         if (!isAdmin(req, env)) return json({ ok: false, error: 'unauthorized' }, 401);
@@ -770,7 +826,7 @@ export default {
         if (gate) return gate;
         const tier = TIERS[row.plan] || TIERS.pioneer;
         if (p === '/v1/models' && req.method === 'GET') {
-          return json({ object: 'list', data: tier.models.map((id) => ({ id, object: 'model', created: 0, owned_by: 'n3mak' })) });
+          return json({ object: 'list', data: [...tier.models.map((id) => ({ id, object: 'model', created: 0, owned_by: 'n3mak' })), { id: 'n3mak/auto', object: 'model', created: 0, owned_by: 'n3mak', description: 'Task-aware routing with tier-safe fallback' }] });
         }
         if (p === '/v1/chat/completions' && req.method === 'POST') return await handleChat(req, env, ctx, row);
         return oaiError(405, 'Method not allowed');

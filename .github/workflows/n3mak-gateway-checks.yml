@@ -33,6 +33,9 @@ jobs:
           node-version: "22"
       - name: Run router tests
         run: node --test src/*.test.mjs
+      - name: Test SARA bot free AI integration
+        run: node --test src/llm.test.js
+        working-directory: bot
       - name: Check Worker syntax
         run: node --check src/worker.js
       - name: Build Worker bundle without deploying

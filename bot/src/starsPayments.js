@@ -19,7 +19,7 @@ function findTierByStars(stars) {
 }
 
 function parsePayload(payload) {
-  const match = /^n3mak:wallet:(\\d+):(\\d+)$/.exec(String(payload || ''));
+  const match = /^n3mak:wallet:(\d+):(\\d+)$/.exec(String(payload || ''));
   if (!match) return null;
   const telegramId = Number(match[1]);
   const tier = findTierByUsd(Number(match[2]));

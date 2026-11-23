@@ -5,6 +5,7 @@ const { pool, initDb, creditDeposit } = require('./db');
 const { checkRateLimit } = require('./redis');
 const { registerCommands } = require('./commands');
 const { registerRealtorFlow } = require('./realtor-lead'); // ADR-011: /realtor property lead intake
+const { registerStartProducts } = require('./start-products'); // ADR-011: /products catalog + hint buttons
 const { startScheduledPosts } = require('./scheduler');
 const { startTrialNudges } = require('./trial/nudge');
 const { startHqReporter } = require('./hq-reporter'); // D14: 09:00/20:00 UTC into topics
@@ -54,6 +55,9 @@ registerCommands(bot);
 // win; its bot.on('text') middleware passes through via next() when the
 // user has no active realtor session — zero impact on existing behavior.
 registerRealtorFlow(bot);
+// ADR-011: /products catalog with hint buttons — standalone module,
+// no overlap with existing command handlers.
+registerStartProducts(bot);
 
 // --- Telegram Stars (XTR) payments ---
 // pre_checkout_query must be answered within ~10s or the payment UI fails.
@@ -335,6 +339,7 @@ async function syncBotCommands() {
       { command: 'buy', description: 'شراء Pioneer/Starter/Pro' },
       { command: 'ask', description: 'اسأل N3mak' },
       { command: 'realtor', description: '🏠 عقارات US/CA — Property agent' },
+      { command: 'products', description: '🛍 كل المنتجات / All products' },
       { command: 'deposit', description: 'شحن المحفظة' },
       { command: 'portfolio', description: 'الرصيد' },
       { command: 'help', description: 'الأوامر' },

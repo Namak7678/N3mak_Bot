@@ -33,7 +33,7 @@ function paymentMenuKeyboard() {
   const rows = [];
   if (whop.isConfigured()) {
     rows.push([{ text: `⚡ Starter $${whop.starterPriceUsd()}`, url: whop.starterCheckoutUrl() }]);
-  rows.push([{ text: `⚡ Whop $${whop.priceUsd()} Starter`, url: whop.checkoutUrl() }]);
+    rows.push([{ text: `⚡ Whop $${whop.priceUsd()} Starter`, url: whop.checkoutUrl() }]);
     rows.push([{ text: `💎 Whop $${whop.proPriceUsd()} Pro`, url: whop.proCheckoutUrl() }]);
   }
   if (starsPayments.isConfigured()) {
@@ -254,7 +254,6 @@ function registerCommands(bot) {
     });
   }
 
-
   async function sendTrial(ctx) {
     const telegramId = ctx.from && ctx.from.id;
     if (!telegramId) {
@@ -290,139 +289,52 @@ function registerCommands(bot) {
       const key = data.key;
       const expires = data.expires_at || '24h';
       const curl = [
-        'curl ' + base + '/chat/completions \\',
-        '  -H "Authorization: Bearer ' + key + '" \\',
-        '  -H "Content-Type: application/json" \\',
+        'curl ' + base + '/chat/completions \\\n',
+        '  -H "Authorization: Bearer ' + key + '" \\\n',
+        '  -H "Content-Type: application/json" \\\n',
         '  -d \'{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}\'',
-      ].join('\n');
-      const already = data.already ? '\n(مفتاح تجربتك الحالي / existing active trial key)\n' : '';
-      const body =
-        '🎁 <b>تجربتك المجانية جاهزة</b>' +
-        already +
-        '\n━━━━━━━━━━━━━━━━\n' +
-        'BASE_URL: <code>' +
-        base +
-        '</code>\n' +
-        'API_KEY: <code>' +
-        key +
-        '</code>\n' +
-        'MODEL: <code>gpt-oss-20b</code>\n' +
-        'الحدود: 20 طلب/يوم · 5/دقيقة · تنتهي خلال 24 ساعة\n' +
-        'Expires: <code>' +
-        expires +
-        '</code>\n\n' +
-        'مثال / Example:\n<pre>' +
-        curl.replace(/</g, '&lt;') +
-        '</pre>\n\n' +
-        'بعد التجربة: Pioneer $3 → /buy\n' +
-        '<i>EN:</i> Free trial — gpt-oss-20b · 20 req/day · 24h.';
-      await ctx.reply(body, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        reply_markup: {
-          inline_keyboard: [[{ text: '🔥 Pioneer $3 بعد التجربة', url: trialGw.pioneerCheckoutUrl() }]],
-        },
-      });
+      ].join('');
+      const already = data.already ? '\n(مفتاح تجربتك الحالي لا يزال صالحاً — هذا رابط الاستخدام)' : '';
+      await ctx.reply(
+        '🎁 <b>تجربة مجانية 24 ساعة</b>\n' +
+          '━━━━━━━━━━━━━━━━\n' +
+          'مفتاحك جاهز — 20 طلب/يوم:\n\n' +
+          '<code>' + key + '</code>\n\n' +
+          '<b>مثال استخدام:</b>\n' +
+          '<code>' + curl + '</code>\n' +
+          already +
+          '\n<i>EN:</i> Trial key active for 24h (20 req/day). Use it with any OpenAI-compatible client.',
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
     } catch (err) {
-      console.error('[trial] error', err.message);
-      await ctx.reply('تعذّر إنشاء التجربة. /support');
+      console.error('[trial] failed:', err.message);
+      await ctx.reply('تعذّر إنشاء التجربة الآن. حاول بعد دقيقة أو /support.');
     }
   }
 
-  bot.command('trial', sendTrial);
-  bot.action('menu:trial', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    await sendTrial(ctx);
-  });
+  bot.command('buy', (ctx) => sendBuy(ctx));
+  bot.command('pricing', (ctx) => sendBuy(ctx));
+  bot.command('trial', (ctx) => sendTrial(ctx));
+  bot.action('menu:buy_hint', (ctx) => sendBuy(ctx));
+  bot.action('menu:trial', (ctx) => sendTrial(ctx));
 
-  bot.command('buy', sendBuy);
-  bot.command('pricing', sendBuy);
-  bot.command('whop', sendBuy);
-
-  bot.command('invest', async (ctx) => {
-    try {
-      const snapshot = await formatMarketSnapshot();
-      await ctx.reply(
-        `💼 <b>نافذة الاستثمار</b>\n\n${escapeHtml(snapshot)}\n\nشحن المحفظة: /deposit · شراء البوابة: /buy`,
-        { parse_mode: 'HTML' }
-      );
-    } catch {
-      await ctx.reply('💼 فرص الاستثمار تُجهَّز لحسابك. ابدأ بـ /deposit أو /buy.');
+  bot.command('pack', async (ctx) => {
+    const inv = await blueprints.createInvoice(bot, ctx);
+    if (inv && inv.ok) return;
+    if (inv && inv.error) {
+      await ctx.reply('📘 ' + inv.error);
+      return;
     }
+    await ctx.reply('تعذّر إنشاء فاتورة المخططات الآن. جرّب /pack بعد قليل أو /support.');
   });
 
-
-
-  bot.command('share', async (ctx) => {
-    const pioneer = whop.pioneerCheckoutUrl();
-    const shareTg = `https://t.me/share/url?url=${encodeURIComponent(pioneer)}&text=${encodeURIComponent('🔥 N3mak AI Gateway — Pioneer $3 اليوم + مفتاح فوري على تيليجرام')}`;
-    const shareX = `https://twitter.com/intent/tweet?text=${encodeURIComponent('N3mak AI Gateway — OmniRoute + instant Telegram key. Pioneer $3: '+pioneer)}`;
-    const pack = (process.env.PUBLIC_SHARE_URL || 'https://n3mak-buy.vercel.app/share.html').trim();
-    await ctx.reply(
-      `📣 <b>انشر العرض — زوّد المشاهدات والعملاء</b>\n` +
-      `━━━━━━━━━━━━━━━━\n` +
-      `1) حوّل للمجموعات\n` +
-      `2) أو اضغط أزرار المشاركة\n` +
-      `3) حزمة كاملة: <a href="${pack}">${pack}</a>\n\n` +
-      `🎯 الهدف: أول دفعة اليوم`,
-      {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🔥 ادفع Pioneer $3', url: pioneer }],
-            [{ text: '📤 مشاركة تيليجرام', url: shareTg }],
-            [{ text: '𝕏 نشر على X', url: shareX }],
-            [{ text: '📦 حزمة المنشورات', url: pack }],
-          ],
-        },
-      }
-    );
-  });
-
-  bot.command('apps', async (ctx) => {
-    const appsUrl = (process.env.PUBLIC_APPS_URL || '').trim() || 'https://n3mak-buy.vercel.app/apps.html';
-    const text =
-      `📦 <b>مشاريع N3mak للبيع</b>\n` +
-      `━━━━━━━━━━━━━━━━\n` +
-      `1) <b>AI Gateway</b> — OmniRoute · من $9\n` +
-      `2) <b>AI Chat</b> — شات ويب مربوط Whop (قيد النشر)\n` +
-      `3) <b>Frontend SaaS / v2</b> — من أرشيف GitHub → نفس القمع\n\n` +
-      `🔗 <a href="${appsUrl}">كتالوج التطبيقات</a>\n` +
-      `💳 /buy · 🤖 @N3mak_bot\n\n` +
-      `<i>EN:</i> Product catalog — Gateway live, Chat PR merged path, legacy zips funnel here.`;
-    await ctx.reply(text, {
+  bot.action('menu:deposit_stars', async (ctx) => {
+    await ctx.answerCbQuery().catch(() => {});
+    await ctx.reply(depositMenuText(), {
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: `🔥 Pioneer $${whop.pioneerPriceUsd()} اليوم`, url: whop.pioneerCheckoutUrl() }],
-          [{ text: `⚡ Starter $${whop.priceUsd()}`, url: whop.checkoutUrl() }],
-          [{ text: `💎 Pro $${whop.proPriceUsd()}`, url: whop.proCheckoutUrl() }],
-          [{ text: '📦 كتالوج Apps', url: appsUrl }],
-        ],
-      },
+      reply_markup: paymentMenuKeyboard(),
     });
-  });
-
-  bot.command('portfolio', async (ctx) => {
-    try {
-      const balance = await getBalance(ctx.from.id);
-      if (Number(balance) > 0) {
-        await ctx.reply(
-          `📊 <b>محفظتك</b>\nالرصيد: <b>$${Number(balance).toFixed(2)}</b>\n\nلا مراكز سوق نشطة بعد — قريباً.\n<i>EN:</i> Wallet $${Number(balance).toFixed(2)} — no open positions yet.`,
-          { parse_mode: 'HTML' }
-        );
-      } else {
-        await ctx.reply(
-          `📊 الرصيد: <b>$0.00</b>\n\nاشحن عبر /deposit أو اشترِ البوابة /buy\n<i>EN:</i> Empty wallet — use /deposit or /buy.`,
-          { parse_mode: 'HTML', reply_markup: paymentMenuKeyboard() }
-        );
-      }
-    } catch (err) {
-      console.error('[portfolio] failed:', err.message);
-      await ctx.reply('📊 تعذّر تحميل الرصيد حالياً، حاول بعد لحظات.');
-    }
   });
 
   bot.command('deposit', async (ctx) => {
@@ -433,210 +345,97 @@ function registerCommands(bot) {
     });
   });
 
-
-  async function showBlueprintsCatalog(ctx) {
-    if (!blueprints.isConfigured()) {
-      await ctx.reply('⭐ Stars invoices offline (missing bot token).');
-      return;
-    }
-    const lines = blueprints.listPlans().map(
-      (p) => `• <b>${p.key}</b> — ${p.stars}⭐ — ${escapeHtml(p.title)}`
-    );
-    await ctx.reply(
-      ['📘 <b>كتالوج المخططات / Blueprints</b>', ...lines, '', 'اضغط الزر لفاتورة نجوم تيليجرام (XTR).', '<i>EN:</i> 450⭐ PDF pack + monthly plans via Telegram Stars.'].join('\n'),
-      {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '📘 الحزمة — 450⭐', callback_data: 'blueprint:pack' }],
-            [
-              { text: 'أساسي — 300⭐', callback_data: 'blueprint:basic' },
-              { text: 'برو — 900⭐', callback_data: 'blueprint:pro' },
-            ],
-          ],
-        },
-      }
-    );
-  }
-
-  bot.command(['pack', 'blueprints', 'product'], async (ctx) => {
-    await showBlueprintsCatalog(ctx);
-  });
-
-  bot.action('menu:blueprints', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    await showBlueprintsCatalog(ctx);
-  });
-
-  bot.action(/^blueprint:(pack|basic|pro)$/, async (ctx) => {
-    const key = ctx.match[1];
-    await ctx.answerCbQuery().catch(() => {});
-    try {
-      await blueprints.sendPlanInvoice(bot, ctx.chat.id, key);
-    } catch (err) {
-      console.error('[blueprints] sendInvoice failed:', err.message);
-      await ctx.reply('تعذر إنشاء فاتورة النجوم. جرّب لاحقاً أو /support.\nCould not create Stars invoice.');
-    }
-  });
-
   bot.command('deposit_stars', async (ctx) => {
-    if (!starsPayments.isConfigured()) {
-      await ctx.reply('⭐ مدفوعات النجوم تحتاج TELEGRAM_BOT_TOKEN (البوت يعمل عادةً).');
+    const ok = await starsPayments.sendInvoice(bot, ctx);
+    if (!ok) {
+      await ctx.reply('تعذّر إنشاء فاتورة النجوم الآن — استخدم /deposit ثم أعد المحاولة.');
+    }
+  });
+
+  bot.action(/^deposit:/, async (ctx) => {
+    const amount = Number(String(ctx.callbackQuery?.data || '').split(':')[1]);
+    if (!amount) {
+      await ctx.answerCbQuery('مبلغ غير صالح').catch(() => {});
       return;
     }
+    const session = await createDepositSession(amount, ctx.from.id);
+    if (session && session.url) {
+      await ctx.answerCbQuery().catch(() => {});
+      await ctx.reply(`🔗 أكمل الدفع هنا: ${session.url}`, {
+        link_preview_options: { is_disabled: true },
+      });
+    } else {
+      await ctx.answerCbQuery('تعذّر إنشاء الجلسة — جرّب لاحقاً').catch(() => {});
+    }
+  });
+
+  bot.action(/^deposit_stars:/, async (ctx) => {
+    const stars = Number(String(ctx.callbackQuery?.data || '').split(':')[1]);
+    if (!stars) {
+      await ctx.answerCbQuery('مبلغ غير صالح').catch(() => {});
+      return;
+    }
+    const ok = await starsPayments.sendInvoice(bot, ctx, stars);
+    if (!ok) {
+      await ctx.answerCbQuery('تعذّر إنشاء فاتورة النجوم').catch(() => {});
+    }
+  });
+
+  bot.command('portfolio', async (ctx) => {
+    const balance = await safeBalance(ctx.from.id);
     await ctx.reply(
-      '⭐ <b>إيداع بنجوم تيليجرام</b>\nاختر الفئة (مكافئ دولار للمحفظة). رسوم المنصة 2%:\n' +
-        '<i>EN:</i> Pick a Stars tier — same USD credit as card deposits.',
-      {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            starsPayments.DEPOSIT_AMOUNTS_STARS.map((t) => ({
-              text: t.label,
-              callback_data: `deposit_stars:${t.stars}`,
-            })),
-            [{ text: `💳 أو Whop $${whop.priceUsd()}`, url: whop.checkoutUrl() }],
-          ],
-        },
-      }
+      `📊 <b>محفظتك</b>\n` +
+        `━━━━━━━━━━━━━━━━\n` +
+        `💼 الرصيد: <b>${formatBalanceAr(balance)}</b>\n\n` +
+        `اشحن الرصيد: /deposit\n` +
+        `<i>EN:</i> Use /deposit to top up.`,
+      { parse_mode: 'HTML' }
     );
-  });
-
-  bot.action('menu:deposit', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    await ctx.reply(depositMenuText(), {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-      reply_markup: paymentMenuKeyboard(),
-    });
-  });
-
-  bot.action('menu:deposit_stars', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    if (!starsPayments.isConfigured()) {
-      await ctx.reply('⭐ Stars offline.');
-      return;
-    }
-    await ctx.reply('⭐ اختر فئة النجوم:', {
-      reply_markup: {
-        inline_keyboard: [
-          starsPayments.DEPOSIT_AMOUNTS_STARS.map((t) => ({
-            text: t.label,
-            callback_data: `deposit_stars:${t.stars}`,
-          })),
-        ],
-      },
-    });
   });
 
   bot.action('menu:portfolio', async (ctx) => {
     await ctx.answerCbQuery().catch(() => {});
-    try {
-      const balance = await getBalance(ctx.from.id);
-      await ctx.reply(`📊 الرصيد: $${Number(balance).toFixed(2)}`);
-    } catch {
-      await ctx.reply('📊 تعذّر تحميل الرصيد.');
-    }
-  });
-
-  bot.action('menu:support', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
+    const balance = await safeBalance(ctx.from.id);
     await ctx.reply(
-      '🛟 <b>الدعم</b>\nصف مشكلتك هنا وسنتابع.\nللشراء السريع: /buy\n<i>EN:</i> Describe your issue — or /buy for checkout.',
+      `📊 <b>محفظتك</b>\n` +
+        `━━━━━━━━━━━━━━━━\n` +
+        `💼 الرصيد: <b>${formatBalanceAr(balance)}</b>\n\n` +
+        `اشحن الرصيد: /deposit`,
       { parse_mode: 'HTML' }
     );
   });
 
-  bot.action('menu:help', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    await ctx.reply(helpText(), {
+  bot.command('invest', async (ctx) => {
+    if (!llmEnabled()) {
+      await ctx.reply('الذكاء غير مفعّل بعد (OPENAI_BASE_URL).');
+      return;
+    }
+    try {
+      await ctx.sendChatAction('typing').catch(() => {});
+      const answer = await llmChat(
+        [
+          {
+            role: 'system',
+            content:
+              'You are N3mak investment analyst for global markets (Arabic-first). Be concise, honest, and never guarantee returns. Mention /markets for snapshots and /support for custom research.',
+          },
+          { role: 'user', content: 'قدم فرص استثمارية مختصرة عبر الأسواق العالمية اليوم' },
+        ],
+        { max_tokens: 256, task: 'general' }
+      );
+      await ctx.reply(answer || 'لا رد من الذكاء الاصطناعي.');
+    } catch (err) {
+      console.error('[llm] invest failed (soft):', err.message);
+      await ctx.reply('الذكاء غير متاح مؤقتاً. جرّب لاحقاً أو /markets.');
+    }
+  });
+
+  bot.command('markets', async (ctx) => {
+    const text = await formatMarketSnapshot();
+    await ctx.reply(text || 'تعذّر جلب لقطة الأسواق الآن.', {
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
     });
-  });
-
-  bot.action('menu:ask_hint', async (ctx) => {
-    await ctx.answerCbQuery().catch(() => {});
-    await ctx.reply(
-      '🤖 اكتب:\n<code>/ask ما أفضل سوق اليوم؟</code>\n\n<i>EN:</i> /ask your question',
-      { parse_mode: 'HTML' }
-    );
-  });
-
-  bot.action(/^deposit:(\d+)$/, async (ctx) => {
-    const amount = Number(ctx.match[1]);
-    if (!DEPOSIT_AMOUNTS_USD.includes(amount)) {
-      await ctx.answerCbQuery('مبلغ غير صالح', { show_alert: true });
-      return;
-    }
-    if (!stripeConfigured()) {
-      await ctx.answerCbQuery('Stripe غير مفعّل — استخدم Whop أو النجوم', { show_alert: true });
-      return;
-    }
-    try {
-      const url = await createDepositSession(amount, ctx.from.id);
-      await ctx.answerCbQuery();
-      const fee = Math.round(amount * 0.02 * 100) / 100;
-      const credited = Math.round((amount - fee) * 100) / 100;
-      await ctx.reply(
-        `✅ أكمل إيداع $${amount} عبر Stripe:\n${url}\n\nبعد الدفع: $${credited} للمحفظة (رسوم 2% = $${fee}).`
-      );
-    } catch (err) {
-      console.error('[payments] session creation failed:', err.message);
-      await ctx.answerCbQuery('فشل بدء الدفع', { show_alert: true });
-    }
-  });
-
-  bot.action(/^deposit_stars:(\d+)$/, async (ctx) => {
-    const amountStars = Number(ctx.match[1]);
-    const tier = starsPayments.findTierByStars(amountStars);
-    if (!tier) {
-      await ctx.answerCbQuery('فئة نجوم غير صالحة', { show_alert: true });
-      return;
-    }
-    if (!starsPayments.isConfigured()) {
-      await ctx.answerCbQuery('نجوم غير متاحة', { show_alert: true });
-      return;
-    }
-    try {
-      const url = await starsPayments.createStarsInvoiceLink(
-        ctx.telegram,
-        ctx.chat.id,
-        amountStars,
-        ctx.from.id
-      );
-      await ctx.answerCbQuery();
-      const fee = Math.round(tier.usd * 0.02 * 100) / 100;
-      const credited = Math.round((tier.usd - fee) * 100) / 100;
-      await ctx.reply(
-        `⭐ ادفع <b>${tier.stars}⭐</b> لإيداع <b>$${tier.usd}</b>:\n${url}\n\n` +
-          `بعد الدفع: $${credited} للمحفظة (2% = $${fee}).\n` +
-          `<i>EN:</i> Pay ${tier.stars} Stars → $${credited} credited.`,
-        { parse_mode: 'HTML' }
-      );
-    } catch (err) {
-      console.error('[stars] invoice link failed:', err.message);
-      await ctx.answerCbQuery('فشل إنشاء فاتورة النجوم', { show_alert: true });
-    }
-  });
-
-  bot.command('withdraw', (ctx) =>
-    ctx.reply(
-      '🏦 طلبات السحب تظهر هنا عند وجود رصيد.\n<i>EN:</i> Withdrawals appear once you have a balance.',
-      { parse_mode: 'HTML' }
-    )
-  );
-
-  bot.command('markets', async (ctx) => {
-    try {
-      const snapshot = await formatMarketSnapshot();
-      await ctx.reply(`🌍 <b>الأسواق المتاحة</b>\n${MARKETS.join('\n')}\n\n${escapeHtml(snapshot)}`, {
-        parse_mode: 'HTML',
-      });
-    } catch (err) {
-      console.error('[markets] rate fetch failed:', err.message);
-      await ctx.reply(`🌍 الأسواق:\n${MARKETS.join('\n')}`);
-    }
   });
 
   bot.command('ask', async (ctx) => {

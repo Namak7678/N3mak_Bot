@@ -334,6 +334,7 @@ async function syncBotCommands() {
       { command: 'trial', description: 'تجربة مجانية 24 ساعة / Free trial' },
       { command: 'buy', description: 'شراء Pioneer/Starter/Pro' },
       { command: 'ask', description: 'اسأل N3mak' },
+      { command: 'realtor', description: '🏠 عقارات US/CA — Property agent' },
       { command: 'deposit', description: 'شحن المحفظة' },
       { command: 'portfolio', description: 'الرصيد' },
       { command: 'help', description: 'الأوامر' },

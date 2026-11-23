@@ -4,6 +4,7 @@ const { Telegraf } = require('telegraf');
 const { pool, initDb, creditDeposit } = require('./db');
 const { checkRateLimit } = require('./redis');
 const { registerCommands } = require('./commands');
+const { registerRealtorFlow } = require('./realtor-lead'); // ADR-011: /realtor property lead intake
 const { startScheduledPosts } = require('./scheduler');
 const { startTrialNudges } = require('./trial/nudge');
 const { startHqReporter } = require('./hq-reporter'); // D14: 09:00/20:00 UTC into topics
@@ -49,6 +50,10 @@ bot.use(async (ctx, next) => {
 });
 
 registerCommands(bot);
+// ADR-011: /realtor flow. Registered AFTER commands so command handlers
+// win; its bot.on('text') middleware passes through via next() when the
+// user has no active realtor session — zero impact on existing behavior.
+registerRealtorFlow(bot);
 
 // --- Telegram Stars (XTR) payments ---
 // pre_checkout_query must be answered within ~10s or the payment UI fails.
@@ -208,9 +213,9 @@ app.post('/webhook/stripe', express.raw({ type: 'application/json' }), async (re
           await bot.telegram.sendMessage(
             telegramId,
             `✅ Deposit confirmed: $${amountUsd.toFixed(2)}\n` +
-            `Platform fee (2%): $${Number(fee).toFixed(2)}\n` +
-            `Credited to wallet: $${Number(credited).toFixed(2)}\n\n` +
-            `Use /portfolio to check your balance.`
+              `Platform fee (2%): $${Number(fee).toFixed(2)}\n` +
+              `Credited to wallet: $${Number(credited).toFixed(2)}\n\n` +
+              `Use /portfolio to check your balance.`
           );
         }
       } catch (err) {

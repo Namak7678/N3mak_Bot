@@ -487,9 +487,16 @@ function registerCommands(bot) {
   bot.command('agents', async (ctx) => {
     const ownerId = process.env.OWNER_TELEGRAM_ID;
     if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
-    const objective = (ctx.message?.text || '').replace(/^\/agents(@\w+)?\s*/i, '').trim();
+    const rawTask = (ctx.message?.text || '').replace(/^\/agents(@\w+)?\s*/i, '').trim();
+    const evidenceMatch = rawTask.match(/^--evidence\s+([a-f0-9,-]+)\s+([\s\S]+)$/i);
+    const evidenceIds = evidenceMatch ? evidenceMatch[1].split(',').filter(Boolean) : [];
+    const objective = evidenceMatch ? evidenceMatch[2].trim() : rawTask;
+    if (evidenceIds.length > 10) {
+      await ctx.reply('الحد الأقصى 10 مصادر لكل مهمة.');
+      return;
+    }
     if (!objective) {
-      await ctx.reply('الاستخدام: /agents اكتب المهمة المطلوب إعداد مسودة لها ومراجعتها');
+      await ctx.reply('الاستخدام: /agents [--evidence id1,id2] المهمة المطلوب إعدادها ومراجعتها');
       return;
     }
     if (objective.length > 4000) {
@@ -515,7 +522,7 @@ function registerCommands(bot) {
         roles: ['secretary', 'reviewer'],
         allowedTools: ['report:draft', 'audit:read'],
         budget: { maxTokens: 2400, timeoutMs: 45000, maxModelCalls: 2 },
-        evidenceIds: [],
+        evidenceIds,
         createdAt: now.toISOString(),
         expiresAt: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
       };

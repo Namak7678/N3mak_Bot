@@ -30,6 +30,12 @@ function canonicalizeSourceUrl(value) {
   return url.toString();
 }
 
+function verifyEvidenceRecord(record) {
+  if (!record || typeof record.content_text !== 'string' || typeof record.content_sha256 !== 'string') return false;
+  const digest = createHash('sha256').update(record.content_text.trim(), 'utf8').digest('hex');
+  return digest === record.content_sha256;
+}
+
 function createEvidenceRecord(input, now = new Date()) {
   if (!isPlainObject(input)) throw new TypeError('evidence_must_be_object');
   const allowed = ['evidenceId', 'sourceType', 'sourceUrl', 'title', 'content', 'classification', 'metadata'];
@@ -68,4 +74,4 @@ function createEvidenceRecord(input, now = new Date()) {
   });
 }
 
-module.exports = { SOURCE_TYPES, CLASSIFICATIONS, canonicalizeSourceUrl, createEvidenceRecord };
+module.exports = { SOURCE_TYPES, CLASSIFICATIONS, canonicalizeSourceUrl, createEvidenceRecord, verifyEvidenceRecord };

@@ -14,6 +14,11 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function assertExactKeys(value, allowed, field) {
+  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unexpected.length) throw new TypeError(`unexpected_${field}_fields:${unexpected.join(',')}`);
+}
+
 function isIsoDate(value) {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value)) && /^\d{4}-\d\d-\d\dT/.test(value);
 }
@@ -26,9 +31,11 @@ function assertString(value, field, max = 256) {
 
 function validateTaskEnvelope(task) {
   if (!isPlainObject(task)) throw new TypeError('task_must_be_object');
+  assertExactKeys(task, ['taskId', 'idempotencyKey', 'requester', 'taskType', 'priority', 'dataClassification', 'approvalPolicy', 'roles', 'allowedTools', 'budget', 'evidenceIds', 'createdAt', 'expiresAt'], 'task');
   assertString(task.taskId, 'task_id', 100);
   assertString(task.idempotencyKey, 'idempotency_key', 128);
   if (!isPlainObject(task.requester)) throw new TypeError('invalid_requester');
+  assertExactKeys(task.requester, ['userId'], 'requester');
   assertString(String(task.requester.userId || ''), 'requester_user_id', 128);
   if (!TASK_TYPES.includes(task.taskType)) throw new TypeError('invalid_task_type');
   if (!PRIORITIES.includes(task.priority)) throw new TypeError('invalid_priority');
@@ -48,6 +55,7 @@ function validateTaskEnvelope(task) {
     throw new TypeError('duplicate_allowed_tool');
   }
   if (!isPlainObject(task.budget)) throw new TypeError('invalid_budget');
+  assertExactKeys(task.budget, ['maxTokens', 'timeoutMs', 'maxModelCalls'], 'budget');
   for (const field of ['maxTokens', 'timeoutMs', 'maxModelCalls']) {
     if (!Number.isSafeInteger(task.budget[field]) || task.budget[field] < 1) {
       throw new TypeError(`invalid_budget_${field}`);
@@ -70,11 +78,13 @@ function validateTaskEnvelope(task) {
 
 function validateAgentResult(result) {
   if (!isPlainObject(result)) throw new TypeError('result_must_be_object');
+  assertExactKeys(result, ['status', 'summary', 'claims', 'proposedActions'], 'result');
   if (!RESULT_STATUSES.includes(result.status)) throw new TypeError('invalid_result_status');
   assertString(result.summary, 'result_summary', 6000);
   if (!Array.isArray(result.claims) || result.claims.length > 100) throw new TypeError('invalid_claims');
   for (const claim of result.claims) {
     if (!isPlainObject(claim)) throw new TypeError('invalid_claim');
+    assertExactKeys(claim, ['text', 'evidenceIds'], 'claim');
     assertString(claim.text, 'claim_text', 1200);
     if (!Array.isArray(claim.evidenceIds) ||
         claim.evidenceIds.some((id) => typeof id !== 'string' || !id.trim())) {
@@ -85,7 +95,9 @@ function validateAgentResult(result) {
     throw new TypeError('invalid_proposed_actions');
   }
   for (const action of result.proposedActions) {
-    if (!isPlainObject(action) || typeof action.tool !== 'string' || !action.tool.trim() ||
+    if (!isPlainObject(action)) throw new TypeError('invalid_proposed_action');
+    assertExactKeys(action, ['tool', 'arguments'], 'proposed_action');
+    if (typeof action.tool !== 'string' || !action.tool.trim() ||
         !isPlainObject(action.arguments || {})) {
       throw new TypeError('invalid_proposed_action');
     }

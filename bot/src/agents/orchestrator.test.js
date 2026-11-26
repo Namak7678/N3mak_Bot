@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { createOrchestrator } = require('./orchestrator');
 
 function makeTask(overrides = {}) {
@@ -42,7 +43,7 @@ function fakeStore(initialStatus = 'queued') {
     async getEvidence(id) {
       return id === 'evidence-1' ? {
         evidence_id: id, source_type: 'web', source_url: 'https://example.com/source',
-        title: 'Source title', content_text: 'Captured source text', content_sha256: 'a'.repeat(64),
+        title: 'Source title', content_text: 'Captured source text', content_sha256: createHash('sha256').update('Captured source text').digest('hex'),
         classification: 'public', captured_at: new Date().toISOString(),
       } : null;
     },
@@ -162,7 +163,7 @@ test('refuses evidence whose classification exceeds the task classification', as
   const store = fakeStore();
   store.getEvidence = async () => ({
     evidence_id: 'evidence-1', source_type: 'document', source_url: null,
-    title: 'Restricted', content_text: 'Secret data', content_sha256: 'b'.repeat(64),
+    title: 'Restricted', content_text: 'Secret data', content_sha256: createHash('sha256').update('Secret data').digest('hex'),
     classification: 'restricted', captured_at: new Date().toISOString(),
   });
   let called = false;
@@ -194,4 +195,24 @@ test('does not report completion when recovery changed the task state concurrent
   assert.equal(result.status, 'stale');
   assert.equal(result.code, 'TASK_STATE_CHANGED');
   assert.equal(store.rows.get('orchestrator-task-1').status, 'failed');
+});
+
+
+test('blocks a stored evidence record when its content digest does not match', async () => {
+  const store = fakeStore();
+  store.getEvidence = async () => ({
+    evidence_id: 'evidence-1', source_type: 'web', source_url: 'https://example.com',
+    title: 'Tampered', content_text: 'Altered source text', content_sha256: '0'.repeat(64),
+    classification: 'public', captured_at: new Date().toISOString(),
+  });
+  let called = false;
+  const orchestrator = createOrchestrator({
+    store,
+    runAgent: async () => { called = true; return answer(); },
+  });
+  await orchestrator.submit(makeTask());
+  const result = await orchestrator.run('orchestrator-task-1');
+  assert.equal(result.status, 'failed');
+  assert.equal(result.code, 'EVIDENCE_INTEGRITY_CHECK_FAILED');
+  assert.equal(called, false);
 });

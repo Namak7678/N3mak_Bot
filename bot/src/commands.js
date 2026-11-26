@@ -537,6 +537,28 @@ function registerCommands(bot) {
     }
   });
 
+
+  bot.command('agents_status', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    try {
+      await agentTaskStore.ensureSchema();
+      const tasks = await agentTaskStore.listRecentTasks({ limit: 10 });
+      if (!tasks.length) {
+        await ctx.reply('لا توجد مهام مسجلة في Workforce حتى الآن.');
+        return;
+      }
+      const lines = tasks.map((task) => {
+        const created = new Date(task.created_at).toISOString().replace('T', ' ').slice(0, 16);
+        return `• ${task.status} | ${task.task_type} | ${task.task_id.slice(0, 8)} | ${created}`;
+      });
+      await ctx.reply(`N3MAK Workforce — آخر ${tasks.length} مهام\\n\\n${lines.join('\\n')}`);
+    } catch (error) {
+      console.error('[agents_status] failed:', error.message);
+      await ctx.reply('تعذّر تحميل سجل المهام حالياً.');
+    }
+  });
+
   bot.command('support', (ctx) =>
     ctx.reply(
       '🛟 <b>فريق الدعم</b>\nصف مشكلتك هنا.\nشراء سريع: /buy · إيداع: /deposit\n<i>EN:</i> Describe your issue. Quick buy: /buy',

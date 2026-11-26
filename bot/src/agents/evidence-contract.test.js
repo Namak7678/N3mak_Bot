@@ -1,0 +1,41 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { canonicalizeSourceUrl, createEvidenceRecord } = require('./evidence-contract');
+
+test('canonicalizes web source URLs and strips common tracking parameters', () => {
+  assert.equal(
+    canonicalizeSourceUrl('HTTPS://Example.COM/reports/?utm_source=mail&id=7#section'),
+    'https://example.com/reports?id=7',
+  );
+});
+
+test('rejects non-http and credential-bearing evidence URLs', () => {
+  assert.throws(() => canonicalizeSourceUrl('file:///etc/passwd'), /unsafe_evidence_url/);
+  assert.throws(() => canonicalizeSourceUrl('https://user:pass@example.com/'), /unsafe_evidence_url/);
+});
+
+test('creates a provenance record with deterministic content digest', () => {
+  const now = new Date('2026-11-26T12:00:00.000Z');
+  const record = createEvidenceRecord({
+    evidenceId: 'evidence-001',
+    sourceType: 'web',
+    sourceUrl: 'https://example.com/page?utm_campaign=x',
+    title: 'Source title',
+    content: 'Verified excerpt text',
+  }, now);
+  assert.equal(record.sourceUrl, 'https://example.com/page');
+  assert.equal(record.contentSha256.length, 64);
+  assert.equal(record.capturedAt, now.toISOString());
+  assert.equal(record.classification, 'public');
+});
+
+test('requires a URL for web evidence and bounds stored content', () => {
+  assert.throws(() => createEvidenceRecord({
+    evidenceId: 'e1', sourceType: 'web', title: 'Title', content: 'Text',
+  }), /web_evidence_requires_url/);
+  assert.throws(() => createEvidenceRecord({
+    evidenceId: 'e1', sourceType: 'user_note', title: 'Title', content: 'x'.repeat(20001),
+  }), /invalid_evidence_content/);
+});

@@ -191,3 +191,14 @@ The upstream README explicitly describes the project as experimental and says it
 - These tests are committed on the feature branch. The available GitHub connector returned no workflow runs for the new commits, and no local repository runner was available in this session; test execution is therefore **not yet verified**.
 - No live database was contacted, no migration was applied, and no deployment or merge was performed.
 - Next hardening gate: run `cd bot && npm test` in CI; then test schema creation against an isolated PostgreSQL test database before considering merge.
+
+
+## Workforce operations hardening — 2026-11-26
+
+- Added bounded task event-history reads for owner diagnostics.
+- Added an atomic expiry recovery query: overdue queued/running tasks are moved to `failed` and an append-only `task.expired_recovered` audit event is written in the same SQL statement.
+- Recovery intentionally does **not** re-queue or replay expired work. The current worker adapter has no external side-effect executor, and replaying a timed-out model request could create duplicate work.
+- Added legal status-transition enforcement in the store: queued → running/failed; running → completed/needs_evidence/refused/failed.
+- Added owner-only Telegram commands: `/agents_task <uuid>` for task details and the latest audit events; `/agents_recover` for explicit expiry cleanup. `/agents_status` also performs safe expiry cleanup before listing.
+- Reconciled the feature branch with the three latest `main` commits, preserving the readiness gate and adding the readiness policy/tests to this branch. The feature branch is now based on the latest main commit.
+- Verification status for this hardening batch: unit-test code is committed; GitHub Actions results for the latest head have not yet been returned. Vercel build-rate-limit checks remain external preview failures. No production deployment or database migration was run.

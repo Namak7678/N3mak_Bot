@@ -10,6 +10,7 @@ function task(overrides = {}) {
     taskId: 'task-001',
     idempotencyKey: 'idem-001',
     requester: { userId: 'telegram:123' },
+    objective: 'Research a public company profile using only supplied evidence.',
     taskType: 'research',
     priority: 'normal',
     dataClassification: 'public',

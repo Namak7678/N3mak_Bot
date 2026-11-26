@@ -32,6 +32,13 @@ function fakeDatabase({ insertRowCount = 1, updateRowCount = 1 } = {}) {
       async query(sql, params = []) {
         const normalized = sql.replace(/\s+/g, ' ').trim();
         calls.push({ sql: normalized, params });
+        if (normalized.startsWith('INSERT INTO n3mak_agent_evidence')) {
+          return { rowCount: 1, rows: [{
+            evidence_id: params[0], source_type: params[1], source_url: params[2],
+            title: params[3], content_sha256: params[5], classification: params[6],
+            metadata: JSON.parse(params[7]), captured_at: params[8],
+          }] };
+        }
         return { rowCount: 1, rows: [] };
       },
     },
@@ -125,4 +132,34 @@ test('reads task audit history newest first with a bounded limit', async () => {
 
   assert.match(calls[0].sql, /ORDER BY event_id DESC LIMIT \$2/);
   assert.deepEqual(calls[0].params, ['task-store-1', 100]);
+});
+
+
+test('stores evidence with normalized provenance and a content digest', async () => {
+  const { db, calls } = fakeDatabase();
+  const store = createAgentTaskStore({ db });
+
+  const saved = await store.saveEvidence({
+    evidenceId: 'evidence-store-1',
+    sourceType: 'web',
+    sourceUrl: 'https://example.com/report?utm_source=chat',
+    title: 'Public report',
+    content: 'Captured source excerpt',
+  });
+
+  assert.equal(saved.evidence_id, 'evidence-store-1');
+  assert.equal(saved.source_url, 'https://example.com/report');
+  assert.equal(saved.content_sha256.length, 64);
+  assert.match(calls[0].sql, /^INSERT INTO n3mak_agent_evidence/);
+});
+
+test('evidence schema enforces immutable records through a database trigger', async () => {
+  const { db, calls } = fakeDatabase();
+  const store = createAgentTaskStore({ db });
+
+  await store.ensureSchema();
+
+  assert.match(calls[0].sql, /CREATE TABLE IF NOT EXISTS n3mak_agent_evidence/);
+  assert.match(calls[0].sql, /BEFORE UPDATE OR DELETE ON n3mak_agent_evidence/);
+  assert.match(calls[0].sql, /n3mak agent evidence is immutable/);
 });

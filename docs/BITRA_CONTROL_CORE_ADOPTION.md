@@ -224,3 +224,11 @@ The upstream README explicitly describes the project as experimental and says it
 - Worker and reviewer receive the same bounded evidence bundle. Evidence is not fetched from the URL by the adapter.
 - If expiry recovery changes a task while an old worker is still returning, the orchestrator now reports `stale/TASK_STATE_CHANGED` rather than claiming completion.
 - Latest verification run before the last stale-result guard: bot test suite and JavaScript syntax passed. A fresh CI run for the latest head is required to validate the final stale-result guard and test.
+
+
+## Evidence integrity and operational usability — 2026-11-26
+
+- Evidence records are now digest-verified (SHA-256) immediately before entering model context. A missing record, mismatched ID, or digest mismatch blocks the model call.
+- Owner evidence/task lists display full UUIDs so records can be attached with `/agents --evidence id1,id2 ...` and inspected with `/agents_task <uuid>`.
+- Task detail output uses the saved reviewer summary or worker summaries rather than assuming a top-level summary field exists.
+- Stale worker results cannot overwrite an expiry/recovery transition or be reported as completed after their compare-and-set transition loses.

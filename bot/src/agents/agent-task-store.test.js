@@ -90,3 +90,39 @@ test('rolls back a failed compare-and-set transition and writes no audit event',
   assert.equal(calls.at(-2).sql, 'ROLLBACK');
   assert.equal(calls.at(-1).sql, 'RELEASE');
 });
+
+
+test('rejects illegal task status transitions before opening a database transaction', async () => {
+  const { db, calls } = fakeDatabase();
+  const store = createAgentTaskStore({ db });
+
+  await assert.rejects(
+    store.transitionTask('task-store-1', 'completed', 'running'),
+    /invalid_task_status_transition/,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('expires overdue queued and running tasks atomically and appends recovery audit events', async () => {
+  const { db, calls } = fakeDatabase();
+  const store = createAgentTaskStore({ db });
+
+  await store.expireOverdueTasks();
+
+  const sql = calls[0].sql;
+  assert.match(sql, /UPDATE n3mak_agent_tasks/);
+  assert.match(sql, /status IN \('queued', 'running'\)/);
+  assert.match(sql, /expires_at <= NOW\(\)/);
+  assert.match(sql, /INSERT INTO n3mak_agent_task_events/);
+  assert.match(sql, /task.expired_recovered/);
+});
+
+test('reads task audit history newest first with a bounded limit', async () => {
+  const { db, calls } = fakeDatabase();
+  const store = createAgentTaskStore({ db });
+
+  await store.getTaskEvents('task-store-1', { limit: 500 });
+
+  assert.match(calls[0].sql, /ORDER BY event_id DESC LIMIT \$2/);
+  assert.deepEqual(calls[0].params, ['task-store-1', 100]);
+});

@@ -39,6 +39,13 @@ function fakeStore(initialStatus = 'queued') {
       return { created: true, task: row };
     },
     async getTask(id) { return rows.get(id) || null; },
+    async getEvidence(id) {
+      return id === 'evidence-1' ? {
+        evidence_id: id, source_type: 'web', source_url: 'https://example.com/source',
+        title: 'Source title', content_text: 'Captured source text', content_sha256: 'a'.repeat(64),
+        classification: 'public', captured_at: new Date().toISOString(),
+      } : null;
+    },
     async transitionTask(id, from, to, options = {}) {
       const row = rows.get(id);
       if (!row || row.status !== from) return false;
@@ -78,8 +85,10 @@ test('runs assigned workers and independent reviewer, without executing proposed
   assert.equal(result.status, 'completed');
   assert.equal(calls.length, 2);
   assert.equal(calls[0].role, 'researcher');
+  assert.equal(calls[0].evidence[0].content, 'Captured source text');
   assert.equal(calls[1].role, 'reviewer');
   assert.equal(calls[1].reviewOnly, true);
+  assert.equal(calls[1].evidence[0].evidenceId, 'evidence-1');
   assert.equal(result.sideEffectsExecuted, 0);
   assert.equal(result.agentResults[0].blockedActions[0].reason, 'tool_not_allowed_by_task');
   assert.equal(store.rows.get('orchestrator-task-1').status, 'completed');
@@ -132,4 +141,38 @@ test('fails closed when the agent returns malformed output', async () => {
   const result = await orchestrator.run('orchestrator-task-1');
   assert.equal(result.status, 'failed');
   assert.equal(store.rows.get('orchestrator-task-1').status, 'failed');
+});
+
+
+test('stops before model calls when a task references a missing stored evidence record', async () => {
+  const store = fakeStore();
+  let called = false;
+  const orchestrator = createOrchestrator({
+    store,
+    runAgent: async () => { called = true; return answer(); },
+  });
+  await orchestrator.submit(makeTask({ evidenceIds: ['missing-evidence'] }));
+  const result = await orchestrator.run('orchestrator-task-1');
+  assert.equal(result.status, 'needs_evidence');
+  assert.equal(result.code, 'EVIDENCE_RECORD_NOT_FOUND');
+  assert.equal(called, false);
+});
+
+test('refuses evidence whose classification exceeds the task classification', async () => {
+  const store = fakeStore();
+  store.getEvidence = async () => ({
+    evidence_id: 'evidence-1', source_type: 'document', source_url: null,
+    title: 'Restricted', content_text: 'Secret data', content_sha256: 'b'.repeat(64),
+    classification: 'restricted', captured_at: new Date().toISOString(),
+  });
+  let called = false;
+  const orchestrator = createOrchestrator({
+    store,
+    runAgent: async () => { called = true; return answer(); },
+  });
+  await orchestrator.submit(makeTask({ dataClassification: 'public' }));
+  const result = await orchestrator.run('orchestrator-task-1');
+  assert.equal(result.status, 'refused');
+  assert.equal(result.code, 'EVIDENCE_CLASSIFICATION_MISMATCH');
+  assert.equal(called, false);
 });

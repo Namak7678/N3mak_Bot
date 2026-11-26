@@ -176,3 +176,22 @@ test('refuses evidence whose classification exceeds the task classification', as
   assert.equal(result.code, 'EVIDENCE_CLASSIFICATION_MISMATCH');
   assert.equal(called, false);
 });
+
+
+test('does not report completion when recovery changed the task state concurrently', async () => {
+  const store = fakeStore();
+  const transition = store.transitionTask;
+  store.transitionTask = async (id, from, to, options) => {
+    if (to === 'completed') {
+      store.rows.get(id).status = 'failed';
+      return false;
+    }
+    return transition(id, from, to, options);
+  };
+  const orchestrator = createOrchestrator({ store, runAgent: async () => answer() });
+  await orchestrator.submit(makeTask());
+  const result = await orchestrator.run('orchestrator-task-1');
+  assert.equal(result.status, 'stale');
+  assert.equal(result.code, 'TASK_STATE_CHANGED');
+  assert.equal(store.rows.get('orchestrator-task-1').status, 'failed');
+});

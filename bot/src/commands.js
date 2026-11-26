@@ -591,7 +591,7 @@ function registerCommands(bot) {
         return;
       }
       const lines = evidence.map((item) =>
-        `- ${item.evidence_id.slice(0, 8)} | ${item.source_type} | ${String(item.title).slice(0, 70)}`
+        `- ${item.evidence_id} | ${item.source_type} | ${String(item.title).slice(0, 70)}`
       );
       await ctx.reply(`N3MAK Evidence — آخر ${evidence.length} سجلات\n\n${lines.join('\n')}`);
     } catch (error) {
@@ -618,7 +618,7 @@ function registerCommands(bot) {
       const events = await agentTaskStore.getTaskEvents(taskId, { limit: 12 });
       const created = task.created_at ? new Date(task.created_at).toISOString() : 'غير متاح';
       const updated = task.updated_at ? new Date(task.updated_at).toISOString() : 'غير متاح';
-      const summary = task.result?.summary || task.result?.code || task.error?.code || 'لا توجد نتيجة محفوظة';
+      const summary = task.result?.review?.summary || task.result?.agentResults?.map((item) => item.result?.summary).filter(Boolean).join(' | ') || task.result?.summary || task.result?.code || task.error?.code || 'لا توجد نتيجة محفوظة';
       const history = events.reverse().map((event) => {
         const at = event.created_at ? new Date(event.created_at).toISOString().slice(0, 16) : '';
         return `- ${at} | ${event.event_type} | ${event.actor}`;
@@ -662,7 +662,7 @@ function registerCommands(bot) {
       }
       const lines = tasks.map((task) => {
         const created = new Date(task.created_at).toISOString().replace('T', ' ').slice(0, 16);
-        return `• ${task.status} | ${task.task_type} | ${task.task_id.slice(0, 8)} | ${created}`;
+        return `• ${task.status} | ${task.task_type} | ${task.task_id} | ${created}`;
       });
       await ctx.reply(`N3MAK Workforce — آخر ${tasks.length} مهام\n\n${lines.join('\n')}`);
     } catch (error) {

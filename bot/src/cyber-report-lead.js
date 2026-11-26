@@ -26,6 +26,7 @@ function registerCyberReportFlow(bot) {
   }
   bot.command('cyberreport', begin);
   bot.action('cyberreport:start', async (ctx) => { await ctx.answerCbQuery(); await begin(ctx); });
+  bot.command('cancel', async (ctx) => { sessions.delete(ctx.from?.id); await ctx.reply('تم إلغاء طلب التقرير. /cyberreport لبدء طلب جديد.'); });
   bot.on('text', async (ctx, next) => {
     const s = sessions.get(ctx.from?.id);
     if (!s || cancel(ctx.message?.text)) {

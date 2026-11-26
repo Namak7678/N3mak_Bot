@@ -125,7 +125,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
           evidenceIds: [...task.evidenceIds],
           priorResults: results.map(({ role, result, blockedActions }) => ({ role, result, blockedActions })),
           reviewOnly: true,
-          budget: { ...task.budget, remainingMs, callNumber: calls },
+          budget: { ...task.budget, maxTokens: maxTokensPerCall, remainingMs, callNumber: calls },
         }), remainingMs);
         finalReview = validateAgentResult(raw);
         const evidence = validateEvidenceReferences(finalReview, task.evidenceIds);

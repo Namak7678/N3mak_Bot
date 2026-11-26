@@ -17,12 +17,14 @@ function cancel(text) {
   return t.startsWith('/') || ['cancel', 'stop', 'إلغاء'].includes(t);
 }
 function registerCyberReportFlow(bot) {
-  bot.command('cyberreport', async (ctx) => {
+  async function begin(ctx) {
     const id = ctx.from?.id;
     if (!id) return;
     sessions.set(id, { telegramId: id, username: ctx.from.username || '', firstName: ctx.from.first_name || '', fields: {}, step: 0, createdAt: new Date().toISOString() });
-    await ctx.reply('🛡 <b>N3mak Cyber Risk Intelligence</b>\nنموذج طلب تقرير عن إشارات التعرض المنشورة علناً. لا ترسل كلمات مرور أو ملفات أو بيانات مسروقة.\n\n' + FIELDS[0].question + '\nاكتب /cancel للإلغاء.', { parse_mode: 'HTML' });
-  });
+    await ctx.reply('🛡 <b>N3mak Cyber Risk Intelligence</b>\\nنموذج طلب تقرير عن إشارات التعرض المنشورة علناً. لا ترسل كلمات مرور أو ملفات أو بيانات مسروقة.\\n\\n' + FIELDS[0].question + '\\nاكتب /cancel للإلغاء.', { parse_mode: 'HTML' });
+  }
+  bot.command('cyberreport', begin);
+  bot.action('cyberreport:start', async (ctx) => { await ctx.answerCbQuery(); await begin(ctx); });
   bot.on('text', async (ctx, next) => {
     const s = sessions.get(ctx.from?.id);
     if (!s || cancel(ctx.message?.text)) {

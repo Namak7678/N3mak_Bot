@@ -603,7 +603,7 @@ function registerCommands(bot) {
   bot.command('agents_task', async (ctx) => {
     const ownerId = process.env.OWNER_TELEGRAM_ID;
     if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
-    const taskId = (ctx.message?.text || '').replace(/^\\/agents_task(@\\w+)?\\s*/i, '').trim();
+    const taskId = (ctx.message?.text || '').replace(/^\/agents_task(@\w+)?\s*/i, '').trim();
     if (!/^[a-f0-9-]{16,100}$/i.test(taskId)) {
       await ctx.reply('الاستخدام: /agents_task معرف_المهمة');
       return;

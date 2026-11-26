@@ -75,22 +75,26 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       return fail('needs_evidence', 'EVIDENCE_STORE_UNAVAILABLE');
     }
     const classificationRank = { public: 0, internal: 1, confidential: 2, restricted: 3 };
-    for (const evidenceId of task.evidenceIds) {
-      const evidence = await store.getEvidence(evidenceId);
-      if (!evidence) return fail('needs_evidence', 'EVIDENCE_RECORD_NOT_FOUND', { missingEvidenceIds: [evidenceId] });
-      if (!(classificationRank[task.dataClassification] >= classificationRank[evidence.classification])) {
-        return fail('refused', 'EVIDENCE_CLASSIFICATION_MISMATCH', { evidenceId });
+    try {
+      for (const evidenceId of task.evidenceIds) {
+        const evidence = await store.getEvidence(evidenceId);
+        if (!evidence) return fail('needs_evidence', 'EVIDENCE_RECORD_NOT_FOUND', { missingEvidenceIds: [evidenceId] });
+        if (!(classificationRank[task.dataClassification] >= classificationRank[evidence.classification])) {
+          return fail('refused', 'EVIDENCE_CLASSIFICATION_MISMATCH', { evidenceId });
+        }
+        evidenceBundle.push({
+          evidenceId: evidence.evidence_id,
+          sourceType: evidence.source_type,
+          sourceUrl: evidence.source_url,
+          title: evidence.title,
+          content: evidence.content_text,
+          contentSha256: evidence.content_sha256,
+          classification: evidence.classification,
+          capturedAt: evidence.captured_at,
+        });
       }
-      evidenceBundle.push({
-        evidenceId: evidence.evidence_id,
-        sourceType: evidence.source_type,
-        sourceUrl: evidence.source_url,
-        title: evidence.title,
-        content: evidence.content_text,
-        contentSha256: evidence.content_sha256,
-        classification: evidence.classification,
-        capturedAt: evidence.captured_at,
-      });
+    } catch (error) {
+      return fail('failed', 'EVIDENCE_LOOKUP_FAILED');
     }
 
     for (const role of roles) {

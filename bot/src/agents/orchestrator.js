@@ -190,10 +190,17 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       }
     }
 
+    // The durable report is composed only from validated, evidence-linked claims.
+    // Free-form model summaries remain drafts and are never promoted to verified findings.
+    const verifiedClaims = finalReview
+      ? finalReview.claims
+      : results.flatMap(({ result: agentResult }) => agentResult.claims);
     const result = {
       status: 'completed',
       taskId,
-      agentResults: results,
+      summary: `Completed with ${verifiedClaims.length} evidence-linked claim(s); model-generated summaries remain unverified drafts.`,
+      verifiedClaims,
+      agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),
       review: finalReview,
       modelCalls: calls,
       sideEffectsExecuted: 0,

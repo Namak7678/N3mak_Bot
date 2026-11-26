@@ -540,6 +540,9 @@ function registerCommands(bot) {
         const claimLines = claims.map((claim, index) =>
           `${index + 1}. ${claim.text}\n   الأدلة: ${claim.evidenceIds.join(', ')}`
         );
+        const sourceLines = (result.evidenceReferences || []).map((source) =>
+          `• ${source.title} [${source.evidenceId}]\n  ${source.sourceUrl || 'مصدر داخلي'}\n  SHA-256: ${source.contentSha256}`
+        );
         const draftLines = (result.agentDrafts || []).map((draft) =>
           `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
         );
@@ -547,6 +550,7 @@ function registerCommands(bot) {
           result.summary || 'اكتملت المهمة.',
           claims.length ? '\nالنتائج المدعومة بالأدلة:\n' + claimLines.join('\n\n')
             : '\nلم ينتج الفريق ادعاءات موثقة بالأدلة؛ لا تُعرض المسودات كحقائق.',
+          sourceLines.length ? '\n\nسجل المصادر المرتبطة:\n' + sourceLines.join('\n\n') : '',
           draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
         ].join('');
       } else {

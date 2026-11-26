@@ -29,6 +29,7 @@ jobs:
             https://n3mak-bot-production.up.railway.app/health)"
           printf '%s\n' "$response"
           grep -q '"status":"ok"' <<< "$response"
+      # /ready validates PostgreSQL and Redis, not just the Express process.
       - name: Check Railway bot readiness
         shell: bash
         run: |

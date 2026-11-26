@@ -195,11 +195,18 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
     const verifiedClaims = finalReview
       ? finalReview.claims
       : results.flatMap(({ result: agentResult }) => agentResult.claims);
+    const verifiedEvidenceIds = [...new Set(verifiedClaims.flatMap((claim) => claim.evidenceIds))];
+    const evidenceReferences = evidenceBundle
+      .filter((item) => verifiedEvidenceIds.includes(item.evidenceId))
+      .map(({ evidenceId, sourceType, sourceUrl, title, contentSha256, capturedAt }) => ({
+        evidenceId, sourceType, sourceUrl, title, contentSha256, capturedAt,
+      }));
     const result = {
       status: 'completed',
       taskId,
       summary: `Completed with ${verifiedClaims.length} evidence-linked claim(s); model-generated summaries remain unverified drafts.`,
       verifiedClaims,
+      evidenceReferences,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),
       review: finalReview,
       modelCalls: calls,

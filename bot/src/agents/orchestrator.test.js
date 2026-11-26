@@ -91,6 +91,9 @@ test('runs assigned workers and independent reviewer, without executing proposed
   assert.equal(calls[1].reviewOnly, true);
   assert.equal(calls[1].evidence[0].evidenceId, 'evidence-1');
   assert.equal(result.sideEffectsExecuted, 0);
+  assert.deepEqual(result.verifiedClaims, calls[1] ? calls[1] && result.review.claims : []);
+  assert.equal(result.agentDrafts.length, 1);
+  assert.match(result.summary, /evidence-linked claim/);
   assert.equal(result.agentResults[0].blockedActions[0].reason, 'tool_not_allowed_by_task');
   assert.equal(store.rows.get('orchestrator-task-1').status, 'completed');
 });
@@ -234,4 +237,29 @@ test('blocks a worker factual claim that has no supporting evidence ID', async (
   assert.equal(result.status, 'needs_evidence');
   assert.equal(result.code, 'UNSUPPORTED_CLAIMS');
   assert.deepEqual(result.unsupportedClaimIndexes, [0]);
+});
+
+
+test('blocks reviewer factual claims that lack evidence and does not publish an unreviewed report', async () => {
+  const store = fakeStore();
+  let calls = 0;
+  const orchestrator = createOrchestrator({
+    store,
+    runAgent: async (input) => {
+      calls += 1;
+      if (!input.reviewOnly) return answer('Worker draft that must not become a verified report.');
+      return {
+        status: 'completed',
+        summary: 'Reviewer assertion without provenance.',
+        claims: [{ text: 'Reviewer unsupported assertion.', evidenceIds: [] }],
+        proposedActions: [],
+      };
+    },
+  });
+  await orchestrator.submit(makeTask());
+  const result = await orchestrator.run('orchestrator-task-1');
+  assert.equal(calls, 2);
+  assert.equal(result.status, 'needs_evidence');
+  assert.equal(result.code, 'REVIEW_UNSUPPORTED_CLAIMS');
+  assert.equal(store.rows.get('orchestrator-task-1').status, 'needs_evidence');
 });

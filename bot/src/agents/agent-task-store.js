@@ -1,6 +1,7 @@
 'use strict';
 
 const { pool } = require('../db');
+const { createEvidenceRecord } = require('./evidence-contract');
 
 function createAgentTaskStore({ db = pool } = {}) {
   if (!db || typeof db.query !== 'function' || typeof db.connect !== 'function') {
@@ -24,6 +25,32 @@ function createAgentTaskStore({ db = pool } = {}) {
         ON n3mak_agent_tasks (status, created_at);
       CREATE INDEX IF NOT EXISTS n3mak_agent_tasks_expiry_idx
         ON n3mak_agent_tasks (expires_at);
+      CREATE TABLE IF NOT EXISTS n3mak_agent_evidence (
+        evidence_id TEXT PRIMARY KEY,
+        source_type TEXT NOT NULL CHECK (source_type IN ('web','document','user_note','api')),
+        source_url TEXT,
+        title TEXT NOT NULL,
+        content_text TEXT NOT NULL,
+        content_sha256 CHAR(64) NOT NULL,
+        classification TEXT NOT NULL CHECK (classification IN ('public','internal','confidential','restricted')),
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        captured_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS n3mak_agent_evidence_captured_idx
+        ON n3mak_agent_evidence (captured_at DESC);
+      CREATE INDEX IF NOT EXISTS n3mak_agent_evidence_source_idx
+        ON n3mak_agent_evidence (source_type, captured_at DESC);
+      CREATE OR REPLACE FUNCTION n3mak_reject_evidence_mutation()
+      RETURNS trigger LANGUAGE plpgsql AS $
+      BEGIN
+        RAISE EXCEPTION 'n3mak agent evidence is immutable; add a new version';
+      END;
+      $;
+      DROP TRIGGER IF EXISTS n3mak_agent_evidence_no_update ON n3mak_agent_evidence;
+      CREATE TRIGGER n3mak_agent_evidence_no_update
+        BEFORE UPDATE OR DELETE ON n3mak_agent_evidence
+        FOR EACH ROW EXECUTE FUNCTION n3mak_reject_evidence_mutation();
       CREATE TABLE IF NOT EXISTS n3mak_agent_task_events (
         event_id BIGSERIAL PRIMARY KEY,
         task_id TEXT NOT NULL REFERENCES n3mak_agent_tasks(task_id) ON DELETE RESTRICT,
@@ -86,6 +113,41 @@ function createAgentTaskStore({ db = pool } = {}) {
     } finally {
       client.release();
     }
+  }
+
+  async function saveEvidence(input) {
+    const record = createEvidenceRecord(input);
+    const result = await db.query(
+      `INSERT INTO n3mak_agent_evidence
+        (evidence_id, source_type, source_url, title, content_text, content_sha256, classification, metadata, captured_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
+       RETURNING evidence_id, source_type, source_url, title, content_sha256, classification, metadata, captured_at`,
+      [record.evidenceId, record.sourceType, record.sourceUrl, record.title, record.content,
+        record.contentSha256, record.classification, JSON.stringify(record.metadata), record.capturedAt],
+    );
+    return result.rows[0];
+  }
+
+  async function getEvidence(evidenceId) {
+    const result = await db.query(
+      `SELECT evidence_id, source_type, source_url, title, content_text, content_sha256,
+              classification, metadata, captured_at
+       FROM n3mak_agent_evidence WHERE evidence_id = $1`,
+      [evidenceId],
+    );
+    return result.rows[0] || null;
+  }
+
+  async function listRecentEvidence({ limit = 20, sourceType } = {}) {
+    const safeLimit = Math.max(1, Math.min(100, Number.isInteger(limit) ? limit : 20));
+    const result = await db.query(
+      `SELECT evidence_id, source_type, source_url, title, content_sha256, classification, captured_at
+       FROM n3mak_agent_evidence
+       WHERE ($1::text IS NULL OR source_type = $1)
+       ORDER BY captured_at DESC LIMIT $2`,
+      [sourceType || null, safeLimit],
+    );
+    return result.rows;
   }
 
   async function getTask(taskId) {
@@ -198,7 +260,7 @@ function createAgentTaskStore({ db = pool } = {}) {
     return result.rows;
   }
 
-  return { ensureSchema, createTask, getTask, getTaskEvents, transitionTask, appendEvent, expireOverdueTasks, listRecentTasks };
+  return { ensureSchema, createTask, getTask, getTaskEvents, transitionTask, appendEvent, expireOverdueTasks, listRecentTasks, saveEvidence, getEvidence, listRecentEvidence };
 }
 
 const defaultStore = createAgentTaskStore();

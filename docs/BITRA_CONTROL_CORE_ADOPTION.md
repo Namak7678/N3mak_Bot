@@ -215,3 +215,12 @@ The upstream README explicitly describes the project as experimental and says it
 - The orchestrator loads evidence records before model calls, refuses missing records, enforces task-vs-evidence classification, and passes a bounded evidence bundle to both worker and reviewer. Evidence text is explicitly treated as untrusted input.
 - Evidence bundle size is capped at 10 records per task; each model context excerpt is capped at 5,000 characters.
 - No automatic internet crawler, document parser, or evidence-source API ingestion is claimed or enabled in this phase.
+
+
+## Evidence-to-agent execution verification hardening — 2026-11-26
+
+- The LLM adapter now accepts an injected model client for deterministic tests; tests verify evidence provenance is passed to the model, excerpts are bounded to 5,000 characters, and disabled model configuration prevents calls.
+- The orchestrator now refuses missing evidence records and evidence whose classification exceeds the task's classification before any model call.
+- Worker and reviewer receive the same bounded evidence bundle. Evidence is not fetched from the URL by the adapter.
+- If expiry recovery changes a task while an old worker is still returning, the orchestrator now reports `stale/TASK_STATE_CHANGED` rather than claiming completion.
+- Latest verification run before the last stale-result guard: bot test suite and JavaScript syntax passed. A fresh CI run for the latest head is required to validate the final stale-result guard and test.

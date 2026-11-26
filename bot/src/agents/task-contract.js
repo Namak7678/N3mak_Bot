@@ -106,6 +106,15 @@ function validateAgentResult(result) {
   return result;
 }
 
+
+function validateClaimSupport(result) {
+  validateAgentResult(result);
+  const unsupportedClaimIndexes = result.claims
+    .map((claim, index) => claim.evidenceIds.length ? -1 : index)
+    .filter((index) => index >= 0);
+  return { valid: unsupportedClaimIndexes.length === 0, unsupportedClaimIndexes };
+}
+
 function validateEvidenceReferences(result, allowedEvidenceIds) {
   validateAgentResult(result);
   const allowed = new Set(allowedEvidenceIds);
@@ -125,4 +134,5 @@ module.exports = {
   validateTaskEnvelope,
   validateAgentResult,
   validateEvidenceReferences,
+  validateClaimSupport,
 };

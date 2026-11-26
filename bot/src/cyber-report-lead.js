@@ -1,6 +1,7 @@
 // Defensive cyber-risk report intake for N3mak Radar.
 // Collects company-level public identifiers only; never request passwords or breach data.
 const sessions = new Map();
+const { saveCyberReportLead } = require('./db');
 const FIELDS = [
   { key: 'company', label: 'Company name', question: '🏢 اكتب اسم الشركة / Company name:' },
   { key: 'domain', label: 'Public website/domain', question: '🌐 اكتب الموقع العام للشركة (إن وجد) / Public domain:' },
@@ -46,6 +47,9 @@ function registerCyberReportFlow(bot) {
     }
     sessions.delete(ctx.from.id);
     const f = s.fields;
+    let leadRecord = null;
+    try { leadRecord = await saveCyberReportLead(ctx.from, f); }
+    catch (e) { console.error('[cyberreport] database save failed:', e.message); }
     const message = [
       '🛡 N3mak Cyber Report lead',
       'Company: ' + f.company,
@@ -54,6 +58,7 @@ function registerCyberReportFlow(bot) {
       'Requested: ' + f.report,
       'Contact: ' + (f.contact || 'Not provided'),
       'Telegram: @' + (s.username || 'not set') + ' | ID ' + s.telegramId,
+      'Lead ID: ' + (leadRecord?.id || 'DB save failed'),
       'Received: ' + s.createdAt,
       'Source: N3mak Radar services page',
       'Note: intake only; claim must be independently validated.',
@@ -69,9 +74,9 @@ function registerCyberReportFlow(bot) {
         delivered = true;
       }
     } catch (e) { console.error('[cyberreport] lead notification failed:', e.message); }
-    await ctx.reply(delivered
-      ? '✅ تم استلام طلبك وإرساله لفريق N3mak للمراجعة. هذا ليس تأكيداً بوجود اختراق أو عرضاً مدفوعاً ملزماً.\nReference: N3-CY-' + String(s.telegramId).slice(-5)
-      : '✅ تم استلام بيانات الطلب داخل جلسة البوت. لم يتم إرسالها إلى فريق العمليات لأن قناة التسليم غير مهيأة حالياً. لا تعتبر الطلب تأكيداً بوجود اختراق أو حجزاً مدفوعاً.\nللتواصل لاحقاً: N3mak.team@proton.me');
+    await ctx.reply(leadRecord
+      ? '✅ تم تسجيل طلبك في نظام N3mak. رقم الطلب: N3-CY-' + leadRecord.id + (delivered ? '\\nتم إشعار فريق العمليات.' : '\\nسيتم مراجعته عند تهيئة قناة العمليات.') + '\\nلا يمثل الطلب تأكيداً بوجود اختراق أو التزاماً مدفوعاً.'
+      : '⚠️ وصلنا طلبك، لكن تعذر حفظه في قاعدة البيانات. أعد المحاولة لاحقاً أو تواصل مع N3mak.team@proton.me');
   });
 }
 module.exports = { registerCyberReportFlow };

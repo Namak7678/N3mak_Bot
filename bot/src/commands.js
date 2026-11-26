@@ -534,9 +534,24 @@ function registerCommands(bot) {
       }
       await ctx.sendChatAction('typing').catch(() => {});
       const result = await orchestrator.run(task.taskId);
-      const text = result.status === 'completed'
-        ? (result.review?.summary || result.agentResults?.map((item) => item.result.summary).join('\n\n') || 'اكتملت المهمة دون ملخص.')
-        : `حالة المهمة: ${result.status}\nالسبب: ${result.code || result.error || 'غير محدد'}`;
+      let text;
+      if (result.status === 'completed') {
+        const claims = Array.isArray(result.verifiedClaims) ? result.verifiedClaims : [];
+        const claimLines = claims.map((claim, index) =>
+          `${index + 1}. ${claim.text}\n   الأدلة: ${claim.evidenceIds.join(', ')}`
+        );
+        const draftLines = (result.agentDrafts || []).map((draft) =>
+          `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
+        );
+        text = [
+          result.summary || 'اكتملت المهمة.',
+          claims.length ? '\nالنتائج المدعومة بالأدلة:\n' + claimLines.join('\n\n')
+            : '\nلم ينتج الفريق ادعاءات موثقة بالأدلة؛ لا تُعرض المسودات كحقائق.',
+          draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
+        ].join('');
+      } else {
+        text = `حالة المهمة: ${result.status}\nالسبب: ${result.code || result.error || 'غير محدد'}`;
+      }
       await ctx.reply(`N3MAK Workforce — ${result.status}\n\n${text.slice(0, 3500)}\n\nلم يتم تنفيذ أي إجراء خارجي.`);
     } catch (error) {
       console.error('[agents] task failed:', error.code || error.message);

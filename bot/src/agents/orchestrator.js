@@ -55,6 +55,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
 
     const results = [];
     let calls = 0;
+    const maxTokensPerCall = Math.max(1, Math.floor(task.budget.maxTokens / task.budget.maxModelCalls));
     const roles = task.roles.filter((role) => role !== 'reviewer');
     const reviewerAssigned = task.roles.includes('reviewer');
 
@@ -81,7 +82,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
           evidenceIds: [...task.evidenceIds],
           priorResults: results.map(({ role: priorRole, result }) => ({ role: priorRole, result })),
           reviewOnly: false,
-          budget: { ...task.budget, remainingMs, callNumber: calls },
+          budget: { ...task.budget, maxTokens: maxTokensPerCall, remainingMs, callNumber: calls },
         }), remainingMs);
         const result = validateAgentResult(raw);
         const evidence = validateEvidenceReferences(result, task.evidenceIds);

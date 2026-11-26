@@ -216,3 +216,22 @@ test('blocks a stored evidence record when its content digest does not match', a
   assert.equal(result.code, 'EVIDENCE_INTEGRITY_CHECK_FAILED');
   assert.equal(called, false);
 });
+
+
+test('blocks a worker factual claim that has no supporting evidence ID', async () => {
+  const store = fakeStore();
+  const orchestrator = createOrchestrator({
+    store,
+    runAgent: async () => ({
+      status: 'completed',
+      summary: 'A claim without a source.',
+      claims: [{ text: 'Unsupported factual claim.', evidenceIds: [] }],
+      proposedActions: [],
+    }),
+  });
+  await orchestrator.submit(makeTask());
+  const result = await orchestrator.run('orchestrator-task-1');
+  assert.equal(result.status, 'needs_evidence');
+  assert.equal(result.code, 'UNSUPPORTED_CLAIMS');
+  assert.deepEqual(result.unsupportedClaimIndexes, [0]);
+});

@@ -148,6 +148,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
           role: 'reviewer',
           allowedTools: getRoleCapabilities('reviewer').filter((tool) => task.allowedTools.includes(tool)),
           evidenceIds: [...task.evidenceIds],
+          evidence: evidenceBundle,
           priorResults: results.map(({ role, result, blockedActions }) => ({ role, result, blockedActions })),
           reviewOnly: true,
           budget: { ...task.budget, maxTokens: maxTokensPerCall, remainingMs, callNumber: calls },

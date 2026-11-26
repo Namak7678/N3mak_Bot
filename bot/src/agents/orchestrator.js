@@ -62,11 +62,12 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
 
     async function fail(status, code, details = {}) {
       const result = { status, code, ...details };
-      await store.transitionTask(taskId, 'running', status, {
+      const transitioned = await store.transitionTask(taskId, 'running', status, {
         result,
         error: { code },
         event: { type: `task.${status}`, actor: 'orchestrator', payload: { code } },
       });
+      if (!transitioned) return { taskId, status: 'stale', code: 'TASK_STATE_CHANGED' };
       return { taskId, ...result };
     }
 
@@ -180,10 +181,11 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       modelCalls: calls,
       sideEffectsExecuted: 0,
     };
-    await store.transitionTask(taskId, 'running', 'completed', {
+    const completed = await store.transitionTask(taskId, 'running', 'completed', {
       result,
       event: { type: 'task.completed', actor: 'orchestrator', payload: { modelCalls: calls } },
     });
+    if (!completed) return { taskId, status: 'stale', code: 'TASK_STATE_CHANGED' };
     return result;
   }
 

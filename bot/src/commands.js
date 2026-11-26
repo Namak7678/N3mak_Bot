@@ -215,7 +215,7 @@ function registerCommands(bot) {
 
     if (isCyberReportEntry) {
       await ctx.reply(
-        '🛡 <b>N3mak Cyber Risk Intelligence</b>\\n\\nاطلب تقريراً دفاعياً عن إشارات التعرض المنشورة علناً أو مراقبة دورية. لا نطلب كلمات مرور أو بيانات مسروقة.\\n\\nاستخدم /cyberreport لبدء الطلب.',
+        '🛡 <b>N3mak Cyber Risk Intelligence</b>\n\nاطلب تقريراً دفاعياً عن إشارات التعرض المنشورة علناً أو مراقبة دورية. لا نطلب كلمات مرور أو بيانات مسروقة.\n\nاستخدم /cyberreport لبدء الطلب.',
         { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📝 Start report request', callback_data: 'cyberreport:start' }], [{ text: '🌐 Services & pricing', url: 'https://namak7678.github.io/n3mak-radar/services.html' }]] } }
       );
       return;
@@ -303,9 +303,9 @@ function registerCommands(bot) {
       const key = data.key;
       const expires = data.expires_at || '24h';
       const curl = [
-        'curl ' + base + '/chat/completions \\\n',
-        '  -H "Authorization: Bearer ' + key + '" \\\n',
-        '  -H "Content-Type: application/json" \\\n',
+        'curl ' + base + '/chat/completions \\n',
+        '  -H "Authorization: Bearer ' + key + '" \\n',
+        '  -H "Content-Type: application/json" \\n',
         '  -d \'{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}\'',
       ].join('');
       const already = data.already ? '\n(مفتاح تجربتك الحالي لا يزال صالحاً — هذا رابط الاستخدام)' : '';
@@ -487,7 +487,7 @@ function registerCommands(bot) {
   bot.command('agents', async (ctx) => {
     const ownerId = process.env.OWNER_TELEGRAM_ID;
     if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
-    const objective = (ctx.message?.text || '').replace(/^\\/agents(@\\w+)?\\s*/i, '').trim();
+    const objective = (ctx.message?.text || '').replace(/^\/agents(@\w+)?\s*/i, '').trim();
     if (!objective) {
       await ctx.reply('الاستخدام: /agents اكتب المهمة المطلوب إعداد مسودة لها ومراجعتها');
       return;
@@ -528,9 +528,9 @@ function registerCommands(bot) {
       await ctx.sendChatAction('typing').catch(() => {});
       const result = await orchestrator.run(task.taskId);
       const text = result.status === 'completed'
-        ? (result.review?.summary || result.agentResults?.map((item) => item.result.summary).join('\\n\\n') || 'اكتملت المهمة دون ملخص.')
-        : `حالة المهمة: ${result.status}\\nالسبب: ${result.code || result.error || 'غير محدد'}`;
-      await ctx.reply(`N3MAK Workforce — ${result.status}\\n\\n${text.slice(0, 3500)}\\n\\nلم يتم تنفيذ أي إجراء خارجي.`);
+        ? (result.review?.summary || result.agentResults?.map((item) => item.result.summary).join('\n\n') || 'اكتملت المهمة دون ملخص.')
+        : `حالة المهمة: ${result.status}\nالسبب: ${result.code || result.error || 'غير محدد'}`;
+      await ctx.reply(`N3MAK Workforce — ${result.status}\n\n${text.slice(0, 3500)}\n\nلم يتم تنفيذ أي إجراء خارجي.`);
     } catch (error) {
       console.error('[agents] task failed:', error.code || error.message);
       await ctx.reply('تعذّر تشغيل فريق الوكلاء. لم يتم تنفيذ أي إجراء خارجي.');

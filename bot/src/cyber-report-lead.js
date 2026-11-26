@@ -22,7 +22,7 @@ function registerCyberReportFlow(bot) {
     const id = ctx.from?.id;
     if (!id) return;
     sessions.set(id, { telegramId: id, username: ctx.from.username || '', firstName: ctx.from.first_name || '', fields: {}, step: 0, createdAt: new Date().toISOString() });
-    await ctx.reply('🛡 <b>N3mak Cyber Risk Intelligence</b>\\nنموذج طلب تقرير عن إشارات التعرض المنشورة علناً. لا ترسل كلمات مرور أو ملفات أو بيانات مسروقة.\\n\\n' + FIELDS[0].question + '\\nاكتب /cancel للإلغاء.', { parse_mode: 'HTML' });
+    await ctx.reply('🛡 <b>N3mak Cyber Risk Intelligence</b>\nنموذج طلب تقرير عن إشارات التعرض المنشورة علناً. لا ترسل كلمات مرور أو ملفات أو بيانات مسروقة.\n\n' + FIELDS[0].question + '\nاكتب /cancel للإلغاء.', { parse_mode: 'HTML' });
   }
   bot.command('cyberreport', begin);
   bot.action('cyberreport:start', async (ctx) => { await ctx.answerCbQuery(); await begin(ctx); });
@@ -76,7 +76,7 @@ function registerCyberReportFlow(bot) {
       }
     } catch (e) { console.error('[cyberreport] lead notification failed:', e.message); }
     await ctx.reply(leadRecord
-      ? '✅ تم تسجيل طلبك في نظام N3mak. رقم الطلب: N3-CY-' + leadRecord.id + (delivered ? '\\nتم إشعار فريق العمليات.' : '\\nسيتم مراجعته عند تهيئة قناة العمليات.') + '\\nلا يمثل الطلب تأكيداً بوجود اختراق أو التزاماً مدفوعاً.'
+      ? '✅ تم تسجيل طلبك في نظام N3mak. رقم الطلب: N3-CY-' + leadRecord.id + (delivered ? '\nتم إشعار فريق العمليات.' : '\nسيتم مراجعته عند تهيئة قناة العمليات.') + '\nلا يمثل الطلب تأكيداً بوجود اختراق أو التزاماً مدفوعاً.'
       : '⚠️ وصلنا طلبك، لكن تعذر حفظه في قاعدة البيانات. أعد المحاولة لاحقاً أو تواصل مع N3mak.team@proton.me');
   });
 }

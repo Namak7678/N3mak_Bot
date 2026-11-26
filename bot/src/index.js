@@ -12,6 +12,7 @@ const { startHqReporter } = require('./hq-reporter'); // D14: 09:00/20:00 UTC in
 const { verifyWebhookEvent } = require('./payments');
 const starsPayments = require('./starsPayments');
 const blueprints = require('./blueprints');
+const agentTaskStore = require('./agents/agent-task-store');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3010;
@@ -334,7 +335,10 @@ async function connectWithRetry(name, fn, attempt = 1) {
   }
 }
 
-connectWithRetry('db', initDb);
+connectWithRetry('db', async () => {
+  await initDb();
+  await agentTaskStore.ensureSchema();
+});
 
 if (PUBLIC_URL) {
   const webhookPath = `/webhook/${WEBHOOK_SECRET}`;

@@ -92,6 +92,9 @@ test('runs assigned workers and independent reviewer, without executing proposed
   assert.equal(calls[1].evidence[0].evidenceId, 'evidence-1');
   assert.equal(result.sideEffectsExecuted, 0);
   assert.deepEqual(result.verifiedClaims, calls[1] ? calls[1] && result.review.claims : []);
+  assert.deepEqual(result.evidenceReferences.map((source) => source.evidenceId), ['evidence-1']);
+  assert.equal(result.evidenceReferences[0].sourceUrl, 'https://example.com/source');
+  assert.equal(result.evidenceReferences[0].contentSha256.length, 64);
   assert.equal(result.agentDrafts.length, 1);
   assert.match(result.summary, /evidence-linked claim/);
   assert.equal(result.agentResults[0].blockedActions[0].reason, 'tool_not_allowed_by_task');

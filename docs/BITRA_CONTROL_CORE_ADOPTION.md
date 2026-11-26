@@ -202,3 +202,16 @@ The upstream README explicitly describes the project as experimental and says it
 - Added owner-only Telegram commands: `/agents_task <uuid>` for task details and the latest audit events; `/agents_recover` for explicit expiry cleanup. `/agents_status` also performs safe expiry cleanup before listing.
 - Reconciled the feature branch with the three latest `main` commits, preserving the readiness gate and adding the readiness policy/tests to this branch. The feature branch is now based on the latest main commit.
 - Verification status for this hardening batch: unit-test code is committed; GitHub Actions results for the latest head have not yet been returned. Vercel build-rate-limit checks remain external preview failures. No production deployment or database migration was run.
+
+
+## Evidence Engine foundation — 2026-11-26
+
+- Added `evidence-contract.js`: validates source type, classification, bounded content, capture timestamp and SHA-256 digest; canonicalizes HTTP(S) URLs and removes common tracking parameters.
+- Added immutable `n3mak_agent_evidence` storage with provenance fields, content digest, classification, capture time, indexes, and database triggers rejecting UPDATE/DELETE. Corrections must be stored as new evidence records.
+- Added owner-only Telegram commands:
+  - `/evidence_add https://source.example/page | title | excerpt` stores the supplied excerpt and its source metadata. It does **not** crawl or fetch the URL.
+  - `/evidence_list` lists recent stored records.
+- Added evidence IDs to `/agents` using `/agents --evidence id1,id2 task description`.
+- The orchestrator loads evidence records before model calls, refuses missing records, enforces task-vs-evidence classification, and passes a bounded evidence bundle to both worker and reviewer. Evidence text is explicitly treated as untrusted input.
+- Evidence bundle size is capped at 10 records per task; each model context excerpt is capped at 5,000 characters.
+- No automatic internet crawler, document parser, or evidence-source API ingestion is claimed or enabled in this phase.

@@ -1,0 +1,39 @@
+name: N3mak Production Heartbeat
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/n3mak-platform-monitor.yml"
+  schedule:
+    - cron: "13 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: n3mak-production-heartbeat
+  cancel-in-progress: true
+
+jobs:
+  bot-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Railway bot liveness
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 20 \
+            https://n3mak-bot-production.up.railway.app/health)"
+          printf '%s\n' "$response"
+          grep -q '"status":"ok"' <<< "$response"
+      - name: Check Railway bot readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 20 \
+            https://n3mak-bot-production.up.railway.app/ready)"
+          printf '%s\n' "$response"
+          grep -q '"status":"ready"' <<< "$response"

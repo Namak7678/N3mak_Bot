@@ -49,6 +49,21 @@ async function initDb() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cyber_report_leads (
+      id BIGSERIAL PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      username TEXT,
+      company_name TEXT NOT NULL,
+      public_domain TEXT,
+      country TEXT,
+      request_type TEXT,
+      business_contact TEXT,
+      source TEXT NOT NULL DEFAULT 'n3mak-radar',
+      status TEXT NOT NULL DEFAULT 'new',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
   console.log('[db] tables ready');
 }
 
@@ -122,4 +137,15 @@ async function creditReferralBonus(referrerTelegramId, newUserTelegramId) {
   await creditDeposit(referrerTelegramId, REFERRAL_BONUS_USD, `referral:${newUserTelegramId}`);
 }
 
-module.exports = { pool, initDb, upsertUser, getBalance, creditDeposit, creditReferralBonus, getPlatformRevenue };
+async function saveCyberReportLead(telegramUser, fields) {
+  const r = await pool.query(
+    `INSERT INTO cyber_report_leads
+      (telegram_id, username, company_name, public_domain, country, request_type, business_contact)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at`,
+    [telegramUser.id, telegramUser.username || null, fields.company || 'Not provided',
+      fields.domain || null, fields.country || null, fields.report || null, fields.contact || null]
+  );
+  return r.rows[0];
+}
+
+module.exports = { pool, initDb, upsertUser, getBalance, creditDeposit, creditReferralBonus, getPlatformRevenue, saveCyberReportLead };

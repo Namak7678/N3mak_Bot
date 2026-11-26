@@ -2,7 +2,7 @@
  * Periodic trial expiry / daily-limit nudges → Pioneer $3.
  * Runs every 15 minutes. Marks each trial nudged once.
  */
-const { listNudgePending, markNudged, pioneerCheckoutUrl } = require('./gateway');
+const { adminToken, listNudgePending, markNudged, pioneerCheckoutUrl } = require('./gateway');
 
 const INTERVAL_MS = 15 * 60 * 1000;
 
@@ -21,6 +21,10 @@ function nudgeText(reason) {
 }
 
 function startTrialNudges(bot) {
+  if (!adminToken()) {
+    console.warn('[trial-nudge] disabled: gateway admin token is not configured');
+    return;
+  }
   let running = false;
   async function tick() {
     if (running) return;

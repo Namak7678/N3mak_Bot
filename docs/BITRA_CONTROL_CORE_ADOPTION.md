@@ -232,3 +232,10 @@ The upstream README explicitly describes the project as experimental and says it
 - Owner evidence/task lists display full UUIDs so records can be attached with `/agents --evidence id1,id2 ...` and inspected with `/agents_task <uuid>`.
 - Task detail output uses the saved reviewer summary or worker summaries rather than assuming a top-level summary field exists.
 - Stale worker results cannot overwrite an expiry/recovery transition or be reported as completed after their compare-and-set transition loses.
+
+
+## Deterministic claim support gate — 2026-11-26
+
+- Added a contract-level validator that rejects any non-empty factual claim lacking at least one evidence ID.
+- The orchestrator applies the same gate to worker output and reviewer output. Unsupported claims end the task as `needs_evidence`; they are not silently included in a completed report.
+- Draft-only outputs remain valid with an empty claims array.

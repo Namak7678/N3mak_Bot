@@ -1,6 +1,6 @@
 # N3MAK Control Core — BITRA Adoption Plan
 
-Status: repository inspection complete; implementation not started.
+Status: workforce control core implemented on a non-production feature branch; database integration tests added, execution verification pending.
 Source project: https://github.com/BijectiveLabs/bitra
 Target repository: https://github.com/Namak7678/N3mak_Bot
 
@@ -105,7 +105,7 @@ These paths must be checked against the latest tree before implementation to avo
 
 ## Rollout
 
-### Phase 0 — baseline (current)
+### Phase 0 — baseline (completed for source inspection)
 - Confirm repository access and branch.
 - Inspect existing router, fallback and tests.
 - Inspect existing persistence and deployment configuration.
@@ -149,7 +149,7 @@ These paths must be checked against the latest tree before implementation to avo
 ## Current execution status
 
 - A non-production branch was created: `feat/bitra-control-core-adoption`.
-- This document is the first commit on that branch.
+- The original adoption note was created on `feat/bitra-control-core-adoption`; the active implementation and PR work is on `feat/n3mak-workforce-control-core`.
 - No production branch, deployment, environment secret, customer plan, payment setting or live bot configuration was changed.
 - No BITRA package was installed into N3MAK; its trading-specific dependencies are not needed for this adoption.
 
@@ -182,3 +182,12 @@ Current upstream design details worth retaining as patterns:
 - Event guard and market-specific cost/risk models are specific to trading and should not be copied into N3MAK unchanged.
 
 The upstream README explicitly describes the project as experimental and says it has not been run with real capital by its authors. N3MAK therefore adopts design patterns only, not a production dependency on BITRA.
+
+
+## Follow-up hardening — 2026-11-26
+
+- Added `createAgentTaskStore({ db })` so PostgreSQL access can be injected for isolated tests while the bot keeps using the default pool-backed exports.
+- Added `agent-task-store.test.js` covering atomic task-plus-audit insertion, idempotency conflict behavior, and rollback when a compare-and-set transition loses.
+- These tests are committed on the feature branch. The available GitHub connector returned no workflow runs for the new commits, and no local repository runner was available in this session; test execution is therefore **not yet verified**.
+- No live database was contacted, no migration was applied, and no deployment or merge was performed.
+- Next hardening gate: run `cd bot && npm test` in CI; then test schema creation against an isolated PostgreSQL test database before considering merge.

@@ -9,6 +9,7 @@ function makeTask(overrides = {}) {
     taskId: 'orchestrator-task-1',
     idempotencyKey: 'orchestrator-idem-1',
     requester: { userId: 'telegram:42' },
+    objective: 'Prepare an internal operations summary using supplied context.',
     taskType: 'research',
     priority: 'normal',
     dataClassification: 'public',

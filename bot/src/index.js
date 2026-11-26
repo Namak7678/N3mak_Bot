@@ -5,6 +5,7 @@ const { pool, initDb, creditDeposit } = require('./db');
 const { checkRateLimit } = require('./redis');
 const { registerCommands } = require('./commands');
 const { registerRealtorFlow } = require('./realtor-lead'); // ADR-011: /realtor property lead intake
+const { registerCyberReportFlow } = require('./cyber-report-lead'); // N3mak Radar commercial lead intake
 const { startScheduledPosts } = require('./scheduler');
 const { startTrialNudges } = require('./trial/nudge');
 const { startHqReporter } = require('./hq-reporter'); // D14: 09:00/20:00 UTC into topics
@@ -54,6 +55,7 @@ registerCommands(bot);
 // win; its bot.on('text') middleware passes through via next() when the
 // user has no active realtor session — zero impact on existing behavior.
 registerRealtorFlow(bot);
+registerCyberReportFlow(bot);
 
 // --- Telegram Stars (XTR) payments ---
 // pre_checkout_query must be answered within ~10s or the payment UI fails.

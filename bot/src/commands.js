@@ -552,7 +552,7 @@ function registerCommands(bot) {
         const created = new Date(task.created_at).toISOString().replace('T', ' ').slice(0, 16);
         return `• ${task.status} | ${task.task_type} | ${task.task_id.slice(0, 8)} | ${created}`;
       });
-      await ctx.reply(`N3MAK Workforce — آخر ${tasks.length} مهام\\n\\n${lines.join('\\n')}`);
+      await ctx.reply(`N3MAK Workforce — آخر ${tasks.length} مهام\n\n${lines.join('\n')}`);
     } catch (error) {
       console.error('[agents_status] failed:', error.message);
       await ctx.reply('تعذّر تحميل سجل المهام حالياً.');

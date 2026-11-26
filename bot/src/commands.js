@@ -6,6 +6,10 @@ const blueprints = require('./blueprints');
 const whop = require('./whop');
 const { chat: llmChat, isEnabled: llmEnabled } = require('./llm');
 const trialGw = require('./trial/gateway');
+const { randomUUID } = require('crypto');
+const agentTaskStore = require('./agents/agent-task-store');
+const { createOrchestrator } = require('./agents/orchestrator');
+const { runN3makAgent } = require('./agents/llm-agent-adapter');
 
 const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK', '🇷🇺 Russia', '🌍 Africa'];
 
@@ -211,7 +215,7 @@ function registerCommands(bot) {
 
     if (isCyberReportEntry) {
       await ctx.reply(
-        '🛡 <b>N3mak Cyber Risk Intelligence</b>\\n\\nاطلب تقريراً دفاعياً عن إشارات التعرض المنشورة علناً أو مراقبة دورية. لا نطلب كلمات مرور أو بيانات مسروقة.\\n\\nاستخدم /cyberreport لبدء الطلب.',
+        '🛡 <b>N3mak Cyber Risk Intelligence</b>\n\nاطلب تقريراً دفاعياً عن إشارات التعرض المنشورة علناً أو مراقبة دورية. لا نطلب كلمات مرور أو بيانات مسروقة.\n\nاستخدم /cyberreport لبدء الطلب.',
         { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📝 Start report request', callback_data: 'cyberreport:start' }], [{ text: '🌐 Services & pricing', url: 'https://namak7678.github.io/n3mak-radar/services.html' }]] } }
       );
       return;
@@ -299,9 +303,9 @@ function registerCommands(bot) {
       const key = data.key;
       const expires = data.expires_at || '24h';
       const curl = [
-        'curl ' + base + '/chat/completions \\\n',
-        '  -H "Authorization: Bearer ' + key + '" \\\n',
-        '  -H "Content-Type: application/json" \\\n',
+        'curl ' + base + '/chat/completions \\n',
+        '  -H "Authorization: Bearer ' + key + '" \\n',
+        '  -H "Content-Type: application/json" \\n',
         '  -d \'{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}\'',
       ].join('');
       const already = data.already ? '\n(مفتاح تجربتك الحالي لا يزال صالحاً — هذا رابط الاستخدام)' : '';
@@ -475,6 +479,61 @@ function registerCommands(bot) {
     } catch (err) {
       console.error('[llm] ask failed (soft):', err.message);
       await ctx.reply('الذكاء غير متاح مؤقتاً. جرّب لاحقاً أو /support.');
+    }
+  });
+
+
+  // Owner-only workforce pilot. The model may draft and review; no tool action is executed.
+  bot.command('agents', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    const objective = (ctx.message?.text || '').replace(/^\/agents(@\w+)?\s*/i, '').trim();
+    if (!objective) {
+      await ctx.reply('الاستخدام: /agents اكتب المهمة المطلوب إعداد مسودة لها ومراجعتها');
+      return;
+    }
+    if (objective.length > 4000) {
+      await ctx.reply('المهمة طويلة جداً. الحد الأقصى 4000 حرف.');
+      return;
+    }
+    if (!llmEnabled()) {
+      await ctx.reply('محرك الذكاء غير متاح حالياً؛ لم يتم إنشاء المهمة.');
+      return;
+    }
+    try {
+      await agentTaskStore.ensureSchema();
+      const now = new Date();
+      const task = {
+        taskId: randomUUID(),
+        idempotencyKey: `telegram:${ctx.from.id}:${ctx.message.message_id}`,
+        requester: { userId: `telegram:${ctx.from.id}` },
+        objective,
+        taskType: 'operations',
+        priority: 'normal',
+        dataClassification: 'internal',
+        approvalPolicy: 'human_required',
+        roles: ['secretary', 'reviewer'],
+        allowedTools: ['report:draft', 'audit:read'],
+        budget: { maxTokens: 2400, timeoutMs: 45000, maxModelCalls: 2 },
+        evidenceIds: [],
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
+      };
+      const orchestrator = createOrchestrator({ store: agentTaskStore, runAgent: runN3makAgent });
+      const submitted = await orchestrator.submit(task);
+      if (!submitted.created) {
+        await ctx.reply(`هذه المهمة مسجلة مسبقاً: ${submitted.task.task_id} — الحالة: ${submitted.task.status}`);
+        return;
+      }
+      await ctx.sendChatAction('typing').catch(() => {});
+      const result = await orchestrator.run(task.taskId);
+      const text = result.status === 'completed'
+        ? (result.review?.summary || result.agentResults?.map((item) => item.result.summary).join('\n\n') || 'اكتملت المهمة دون ملخص.')
+        : `حالة المهمة: ${result.status}\nالسبب: ${result.code || result.error || 'غير محدد'}`;
+      await ctx.reply(`N3MAK Workforce — ${result.status}\n\n${text.slice(0, 3500)}\n\nلم يتم تنفيذ أي إجراء خارجي.`);
+    } catch (error) {
+      console.error('[agents] task failed:', error.code || error.message);
+      await ctx.reply('تعذّر تشغيل فريق الوكلاء. لم يتم تنفيذ أي إجراء خارجي.');
     }
   });
 

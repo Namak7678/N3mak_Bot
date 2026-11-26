@@ -151,6 +151,7 @@ function helpText() {
     `/markets — الأسواق العالمية\n` +
     `/ask — اسأل ذكاء N3mak (OmniRoute)\n` +
     `/referral — رابط الدعوة (+$1)\n` +
+    `/cyberreport — طلب تقرير مخاطر سيبرانية دفاعي من N3mak Radar\n` +
     `/support — الدعم\n` +
     `/help — هذه القائمة\n\n` +
     `<i>EN:</i> /trial · /pack · /buy · /deposit · /deposit_stars · /portfolio · /ask · /support`
@@ -161,6 +162,7 @@ function registerCommands(bot) {
   bot.start(async (ctx) => {
     const payload = String(ctx.startPayload || '').trim();
     const isRadarEntry = ['radar', 'radar_page'].includes(payload.toLowerCase());
+    const isCyberReportEntry = ['cyber_report', 'cyberreport'].includes(payload.toLowerCase());
     const parsedReferral = /^\d+$/.test(payload) ? Number(payload) : null;
     const referredBy = Number.isSafeInteger(parsedReferral) && parsedReferral > 0
       ? parsedReferral
@@ -203,6 +205,14 @@ function registerCommands(bot) {
             ]
           }
         }
+      );
+      return;
+    }
+
+    if (isCyberReportEntry) {
+      await ctx.reply(
+        '🛡 <b>N3mak Cyber Risk Intelligence</b>\\n\\nاطلب تقريراً دفاعياً عن إشارات التعرض المنشورة علناً أو مراقبة دورية. لا نطلب كلمات مرور أو بيانات مسروقة.\\n\\nاستخدم /cyberreport لبدء الطلب.',
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📝 Start report request', callback_data: 'cyberreport:start' }], [{ text: '🌐 Services & pricing', url: 'https://namak7678.github.io/n3mak-radar/services.html' }]] } }
       );
       return;
     }

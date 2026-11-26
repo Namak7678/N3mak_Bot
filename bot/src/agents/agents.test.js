@@ -33,6 +33,11 @@ test('rejects unknown agent roles and excessive model budgets', () => {
   assert.throws(() => validateTaskEnvelope(task({ budget: { maxTokens: 100001, timeoutMs: 30000, maxModelCalls: 4 } })), /task_budget_exceeds_hard_limit/);
 });
 
+test('rejects unknown fields in task and model outputs', () => {
+  assert.throws(() => validateTaskEnvelope(task({ hiddenOverride: true })), /unexpected_task_fields/);
+  assert.throws(() => validateAgentResult({ status: 'completed', summary: 'ok', claims: [], proposedActions: [], executeNow: true }), /unexpected_result_fields/);
+});
+
 test('rejects duplicate or malformed allowed tools', () => {
   assert.throws(() => validateTaskEnvelope(task({ allowedTools: ['web:search', 'web:search'] })), /duplicate_allowed_tool/);
 });

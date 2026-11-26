@@ -337,6 +337,7 @@ async function syncBotCommands() {
       { command: 'buy', description: 'شراء Pioneer/Starter/Pro' },
       { command: 'ask', description: 'اسأل N3mak' },
       { command: 'realtor', description: '🏠 عقارات US/CA — Property agent' },
+      { command: 'cyberreport', description: '🛡 N3mak Radar cyber risk report' },
       { command: 'deposit', description: 'شحن المحفظة' },
       { command: 'portfolio', description: 'الرصيد' },
       { command: 'help', description: 'الأوامر' },

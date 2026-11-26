@@ -3,6 +3,7 @@
 const { validateTaskEnvelope, validateAgentResult, validateEvidenceReferences } = require('./task-contract');
 const { getRoleCapabilities } = require('./registry');
 const { evaluateToolRequest } = require('./policy-gate');
+const { verifyEvidenceRecord } = require('./evidence-contract');
 
 const TERMINAL = new Set(['completed', 'needs_evidence', 'refused', 'failed']);
 
@@ -80,6 +81,9 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       for (const evidenceId of task.evidenceIds) {
         const evidence = await store.getEvidence(evidenceId);
         if (!evidence) return fail('needs_evidence', 'EVIDENCE_RECORD_NOT_FOUND', { missingEvidenceIds: [evidenceId] });
+        if (evidence.evidence_id !== evidenceId || !verifyEvidenceRecord(evidence)) {
+          return fail('failed', 'EVIDENCE_INTEGRITY_CHECK_FAILED', { evidenceId });
+        }
         if (!(classificationRank[task.dataClassification] >= classificationRank[evidence.classification])) {
           return fail('refused', 'EVIDENCE_CLASSIFICATION_MISMATCH', { evidenceId });
         }

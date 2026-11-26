@@ -169,3 +169,16 @@ The pilot does not expose a general-purpose tool executor. Research tasks withou
 CI results from the earlier adoption branch: N3mak Bot CI and N3mak Gateway checks both completed successfully after the initial governance work. The new workforce runtime requires a fresh CI run on this branch before merge.
 
 No deployment, migration against production, paid provider activation, payment operation, public publishing, repository write or deployment action was performed by the workforce runtime.
+
+
+## Upstream re-check — 2026-11-26
+
+The current upstream GitHub page now identifies the project as TRA, published as `bitra` on PyPI. The latest tagged release shown is v0.14.0 (2026-11-11). The repository default `develop` branch is active development; `master` is described as the stable release line. Pin a tagged release for any future source-level experiment and do not treat `develop` as production-stable.
+
+Current upstream design details worth retaining as patterns:
+- Deterministic policy and execution gates remain the core boundary between agent proposals and actions.
+- Validators can construct independent pro and contra cases, followed by a neutral judge; code checks claims against data before accepting the verdict.
+- Agent outputs that do not fit their schema can be retried with the validation reason.
+- Event guard and market-specific cost/risk models are specific to trading and should not be copied into N3MAK unchanged.
+
+The upstream README explicitly describes the project as experimental and says it has not been run with real capital by its authors. N3MAK therefore adopts design patterns only, not a production dependency on BITRA.

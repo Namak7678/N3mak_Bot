@@ -37,6 +37,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
     if (!record) return { status: 'not_found', taskId };
 
     const task = record.payload;
+    validateTaskEnvelope(task);
     if (TERMINAL.has(record.status)) return { status: record.status, taskId, result: record.result || null };
     if (record.status !== 'queued') return { status: record.status, taskId, busy: record.status === 'running' };
 

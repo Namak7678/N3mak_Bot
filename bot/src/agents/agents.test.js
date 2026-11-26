@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateTaskEnvelope, validateAgentResult, validateEvidenceReferences } = require('./task-contract');
+const { validateTaskEnvelope, validateAgentResult, validateEvidenceReferences, validateClaimSupport } = require('./task-contract');
 const { evaluateToolRequest } = require('./policy-gate');
 
 function task(overrides = {}) {
@@ -99,4 +99,30 @@ test('requires a scoped, unexpired human approval for any future-enabled sensiti
   });
   assert.equal(result.allowed, false);
   assert.equal(result.reason, 'tool_not_allowed_for_role');
+});
+
+
+test('rejects factual claims without any evidence references', () => {
+  const result = {
+    status: 'completed',
+    summary: 'A report with an unsupported statement.',
+    claims: [
+      { text: 'Supported statement.', evidenceIds: ['source-1'] },
+      { text: 'Unsupported statement.', evidenceIds: [] },
+    ],
+    proposedActions: [],
+  };
+  assert.deepEqual(validateClaimSupport(result), {
+    valid: false,
+    unsupportedClaimIndexes: [1],
+  });
+});
+
+test('accepts empty claims for drafting-only outputs', () => {
+  assert.deepEqual(validateClaimSupport({
+    status: 'completed',
+    summary: 'Draft structure prepared.',
+    claims: [],
+    proposedActions: [],
+  }), { valid: true, unsupportedClaimIndexes: [] });
 });

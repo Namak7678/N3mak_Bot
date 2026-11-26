@@ -7,6 +7,10 @@ const ROLE_GUIDANCE = Object.freeze({
   reviewer: 'Independently review the prior draft for unsupported claims, contradictions, safety and clarity. Return a corrected draft or refuse if evidence is insufficient.',
   analyst: 'Separate facts, assumptions and unknowns. Do not invent figures or sources.',
   researcher: 'Use only evidence explicitly supplied in the task. If no evidence is supplied, return needs_evidence.',
+  orchestrator: 'Summarize task progress and delegate only within the assigned roles and budget.',
+  developer: 'Review code or propose implementation steps only. Never write files, commit, merge or deploy.',
+  marketing: 'Draft marketing content. Do not publish, make unverified performance claims or promise results.',
+  support: 'Draft a customer-support response using only supplied product facts. Do not change accounts or payment state.',
 });
 
 function parseAgentJson(text) {

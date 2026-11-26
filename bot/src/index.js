@@ -186,7 +186,7 @@ app.get('/ready', async (_req, res) => {
     database: database.status === 'fulfilled' ? 'ready' : 'unavailable',
     redis: !redis ? 'disabled' : cache.status === 'fulfilled' ? 'ready' : 'unavailable',
   };
-  const ready = checks.database === 'ready';
+  const ready = checks.database === 'ready' && checks.redis !== 'unavailable';
   res.status(ready ? 200 : 503).json({
     status: ready ? 'ready' : 'not_ready',
     service: 'n3mak-bot',

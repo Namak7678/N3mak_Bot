@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { createOrchestrator } = require('./orchestrator');
 
 function makeTask(overrides = {}) {
+  const now = Date.now();
   return {
     taskId: 'orchestrator-task-1',
     idempotencyKey: 'orchestrator-idem-1',
@@ -18,8 +19,8 @@ function makeTask(overrides = {}) {
     allowedTools: ['web:search', 'evidence:attach', 'evidence:verify', 'audit:read'],
     budget: { maxTokens: 3000, timeoutMs: 1000, maxModelCalls: 3 },
     evidenceIds: ['evidence-1'],
-    createdAt: '2026-11-26T10:00:00.000Z',
-    expiresAt: '2026-11-26T11:00:00.000Z',
+    createdAt: new Date(now - 1000).toISOString(),
+    expiresAt: new Date(now + 60 * 60 * 1000).toISOString(),
     ...overrides,
   };
 }
@@ -107,7 +108,7 @@ test('does not execute tasks after their expiry', async () => {
   let called = false;
   const orchestrator = createOrchestrator({
     store,
-    clock: () => new Date('2026-11-26T12:00:00.000Z'),
+    clock: () => new Date(Date.now() + 2 * 60 * 60 * 1000),
     runAgent: async () => { called = true; return answer(); },
   });
   await orchestrator.submit(makeTask());

@@ -97,6 +97,13 @@ function createAgentTaskStore({ db = pool } = {}) {
   }
 
   async function transitionTask(taskId, expectedStatus, nextStatus, { result, error, event } = {}) {
+    const transitions = {
+      queued: ['running', 'failed'],
+      running: ['completed', 'needs_evidence', 'refused', 'failed'],
+    };
+    if (!transitions[expectedStatus]?.includes(nextStatus)) {
+      throw new TypeError('invalid_task_status_transition');
+    }
     const client = await db.connect();
     try {
       await client.query('BEGIN');
@@ -139,6 +146,45 @@ function createAgentTaskStore({ db = pool } = {}) {
     );
   }
 
+  async function getTaskEvents(taskId, { limit = 20 } = {}) {
+    const safeLimit = Math.max(1, Math.min(100, Number.isInteger(limit) ? limit : 20));
+    const result = await db.query(
+      `SELECT event_id, event_type, actor, payload, created_at
+       FROM n3mak_agent_task_events
+       WHERE task_id = $1
+       ORDER BY event_id DESC LIMIT $2`,
+      [taskId, safeLimit],
+    );
+    return result.rows;
+  }
+
+  // Expired work is terminally failed, never silently re-queued. The pilot has
+  // no external side effects, and this avoids replaying a worker still alive
+  // after a process/network timeout.
+  async function expireOverdueTasks() {
+    const result = await db.query(`
+      WITH expired AS (
+        UPDATE n3mak_agent_tasks
+        SET status = 'failed',
+            error = jsonb_build_object('code', 'TASK_EXPIRED_RECOVERED'),
+            updated_at = NOW()
+        WHERE status IN ('queued', 'running') AND expires_at <= NOW()
+        RETURNING task_id, status, updated_at
+      ), logged AS (
+        INSERT INTO n3mak_agent_task_events (task_id, event_type, actor, payload)
+        SELECT task_id, 'task.expired_recovered', 'recovery',
+               jsonb_build_object('code', 'TASK_EXPIRED_RECOVERED')
+        FROM expired
+        RETURNING task_id
+      )
+      SELECT expired.task_id, expired.status, expired.updated_at
+      FROM expired
+      JOIN logged USING (task_id)
+      ORDER BY expired.updated_at DESC
+    `);
+    return result.rows;
+  }
+
   async function listRecentTasks({ limit = 20, status } = {}) {
     const safeLimit = Math.max(1, Math.min(100, Number.isInteger(limit) ? limit : 20));
     const result = await db.query(
@@ -152,7 +198,7 @@ function createAgentTaskStore({ db = pool } = {}) {
     return result.rows;
   }
 
-  return { ensureSchema, createTask, getTask, transitionTask, appendEvent, listRecentTasks };
+  return { ensureSchema, createTask, getTask, getTaskEvents, transitionTask, appendEvent, expireOverdueTasks, listRecentTasks };
 }
 
 const defaultStore = createAgentTaskStore();

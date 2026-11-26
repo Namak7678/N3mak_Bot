@@ -117,4 +117,4 @@ function parseTopicIds(raw) {
   return out;
 }
 
-module.exports = { registerRealtorFlow };
+module.exports = { registerRealtorFlow, parseTopicIds };

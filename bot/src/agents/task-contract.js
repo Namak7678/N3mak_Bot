@@ -66,9 +66,9 @@ function validateTaskEnvelope(task) {
       task.budget.maxModelCalls > 20) {
     throw new RangeError('task_budget_exceeds_hard_limit');
   }
-  if (!Array.isArray(task.evidenceIds) || task.evidenceIds.length > 100 ||
+  if (!Array.isArray(task.evidenceIds) || task.evidenceIds.length > 10 ||
       task.evidenceIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 160)) {
-    throw new TypeError('invalid_evidence_ids');
+    throw new TypeError('invalid_evidence_ids_max_10');
   }
   if (!isIsoDate(task.createdAt) || !isIsoDate(task.expiresAt) ||
       Date.parse(task.expiresAt) <= Date.parse(task.createdAt)) {

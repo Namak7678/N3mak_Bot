@@ -239,3 +239,13 @@ The upstream README explicitly describes the project as experimental and says it
 - Added a contract-level validator that rejects any non-empty factual claim lacking at least one evidence ID.
 - The orchestrator applies the same gate to worker output and reviewer output. Unsupported claims end the task as `needs_evidence`; they are not silently included in a completed report.
 - Draft-only outputs remain valid with an empty claims array.
+
+
+## Integration hardening — 2026-11-27
+
+- Final workforce reports now separate evidence-validated claims from free-form agent drafts. A model-generated summary is not promoted into the verified findings section.
+- The report carries a deterministic provenance list for the exact evidence IDs cited by accepted claims: source type, canonical source URL, title, SHA-256 digest, and capture timestamp.
+- The existing Telegram `/agents` response renders verified claims, their evidence IDs, source records and digests, while explicitly labeling model summaries as drafts. This closes the gap between the internal validation contract and the operator-facing output.
+- Added regression assertions for reviewer claim rejection and report provenance mapping.
+- These source changes are on the feature branch only. No production database, deployment, paid service, or external action was used.
+- Verification boundary: the GitHub connector can inspect committed files and CI statuses, but did not run the Node test suite locally. Latest Vercel/Netlify preview checks showed provider failures/pending states; those are not treated as passing code tests. Require a fresh successful Bot CI run and isolated PostgreSQL schema test before merge.

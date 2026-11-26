@@ -1,6 +1,6 @@
 'use strict';
 
-const { validateTaskEnvelope, validateAgentResult, validateEvidenceReferences } = require('./task-contract');
+const { validateTaskEnvelope, validateAgentResult, validateEvidenceReferences, validateClaimSupport } = require('./task-contract');
 const { getRoleCapabilities } = require('./registry');
 const { evaluateToolRequest } = require('./policy-gate');
 const { verifyEvidenceRecord } = require('./evidence-contract');
@@ -126,6 +126,13 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
             unknownEvidenceIds: evidence.unknownEvidenceIds,
           });
         }
+        const claimSupport = validateClaimSupport(result);
+        if (!claimSupport.valid) {
+          return fail('needs_evidence', 'UNSUPPORTED_CLAIMS', {
+            role,
+            unsupportedClaimIndexes: claimSupport.unsupportedClaimIndexes,
+          });
+        }
         if (result.status !== 'completed') {
           return fail(result.status, `AGENT_${result.status.toUpperCase()}`, { role, summary: result.summary });
         }
@@ -167,6 +174,12 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
         if (!evidence.valid) {
           return fail('needs_evidence', 'REVIEW_UNKNOWN_EVIDENCE_REFERENCE', {
             unknownEvidenceIds: evidence.unknownEvidenceIds,
+          });
+        }
+        const reviewClaimSupport = validateClaimSupport(finalReview);
+        if (!reviewClaimSupport.valid) {
+          return fail('needs_evidence', 'REVIEW_UNSUPPORTED_CLAIMS', {
+            unsupportedClaimIndexes: reviewClaimSupport.unsupportedClaimIndexes,
           });
         }
         if (finalReview.status !== 'completed') {

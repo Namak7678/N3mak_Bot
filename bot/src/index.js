@@ -13,6 +13,9 @@ const { verifyWebhookEvent } = require('./payments');
 const starsPayments = require('./starsPayments');
 const blueprints = require('./blueprints');
 const agentTaskStore = require('./agents/agent-task-store');
+const { evaluateReadiness } = require('./readiness');
+
+let databaseInitialized = false;
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3010;
@@ -183,15 +186,16 @@ app.get('/ready', async (_req, res) => {
     pool.query('SELECT 1'),
     redis ? redis.ping() : Promise.resolve('disabled'),
   ]);
-  const checks = {
-    database: database.status === 'fulfilled' ? 'ready' : 'unavailable',
-    redis: !redis ? 'disabled' : cache.status === 'fulfilled' ? 'ready' : 'unavailable',
-  };
-  const ready = checks.database === 'ready' && checks.redis !== 'unavailable';
-  res.status(ready ? 200 : 503).json({
-    status: ready ? 'ready' : 'not_ready',
+  const readiness = evaluateReadiness({
+    databaseInitialized,
+    databaseStatus: database.status,
+    redisConfigured: !!redis,
+    redisStatus: cache.status,
+  });
+  res.status(readiness.ready ? 200 : 503).json({
+    status: readiness.ready ? 'ready' : 'not_ready',
     service: 'n3mak-bot',
-    checks,
+    checks: readiness.checks,
     time: new Date().toISOString(),
   });
 });
@@ -338,6 +342,7 @@ async function connectWithRetry(name, fn, attempt = 1) {
 connectWithRetry('db', async () => {
   await initDb();
   await agentTaskStore.ensureSchema();
+  databaseInitialized = true;
 });
 
 if (PUBLIC_URL) {

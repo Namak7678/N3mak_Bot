@@ -538,11 +538,61 @@ function registerCommands(bot) {
   });
 
 
+  bot.command('agents_task', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    const taskId = (ctx.message?.text || '').replace(/^\\/agents_task(@\\w+)?\\s*/i, '').trim();
+    if (!/^[a-f0-9-]{16,100}$/i.test(taskId)) {
+      await ctx.reply('الاستخدام: /agents_task معرف_المهمة');
+      return;
+    }
+    try {
+      await agentTaskStore.ensureSchema();
+      const task = await agentTaskStore.getTask(taskId);
+      if (!task) {
+        await ctx.reply('لم يتم العثور على المهمة.');
+        return;
+      }
+      const events = await agentTaskStore.getTaskEvents(taskId, { limit: 12 });
+      const created = task.created_at ? new Date(task.created_at).toISOString() : 'غير متاح';
+      const updated = task.updated_at ? new Date(task.updated_at).toISOString() : 'غير متاح';
+      const summary = task.result?.summary || task.result?.code || task.error?.code || 'لا توجد نتيجة محفوظة';
+      const history = events.reverse().map((event) => {
+        const at = event.created_at ? new Date(event.created_at).toISOString().slice(0, 16) : '';
+        return `- ${at} | ${event.event_type} | ${event.actor}`;
+      }).join('\\n') || 'لا توجد أحداث مسجلة';
+      await ctx.reply(
+        `المهمة: ${task.task_id}\\nالحالة: ${task.status}\\nالإنشاء: ${created}\\nآخر تحديث: ${updated}\\nالنتيجة: ${String(summary).slice(0, 900)}\\n\\nسجل الأحداث:\\n${history}`
+      );
+    } catch (error) {
+      console.error('[agents_task] failed:', error.message);
+      await ctx.reply('تعذّر تحميل تفاصيل المهمة حالياً.');
+    }
+  });
+
+  bot.command('agents_recover', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    try {
+      await agentTaskStore.ensureSchema();
+      const expired = await agentTaskStore.expireOverdueTasks();
+      await ctx.reply(
+        expired.length
+          ? `تم إغلاق ${expired.length} مهمة منتهية الصلاحية وتسجيلها في سجل التدقيق. لم تتم إعادة تشغيلها تلقائياً.`
+          : 'لا توجد مهام منتهية الصلاحية تحتاج إلى معالجة.'
+      );
+    } catch (error) {
+      console.error('[agents_recover] failed:', error.message);
+      await ctx.reply('تعذّرت معالجة المهام المنتهية حالياً.');
+    }
+  });
+
   bot.command('agents_status', async (ctx) => {
     const ownerId = process.env.OWNER_TELEGRAM_ID;
     if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
     try {
       await agentTaskStore.ensureSchema();
+      await agentTaskStore.expireOverdueTasks();
       const tasks = await agentTaskStore.listRecentTasks({ limit: 10 });
       if (!tasks.length) {
         await ctx.reply('لا توجد مهام مسجلة في Workforce حتى الآن.');

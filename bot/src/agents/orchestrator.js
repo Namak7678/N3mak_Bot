@@ -70,6 +70,29 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       return { taskId, ...result };
     }
 
+    const evidenceBundle = [];
+    if (task.evidenceIds.length && typeof store.getEvidence !== 'function') {
+      return fail('needs_evidence', 'EVIDENCE_STORE_UNAVAILABLE');
+    }
+    const classificationRank = { public: 0, internal: 1, confidential: 2, restricted: 3 };
+    for (const evidenceId of task.evidenceIds) {
+      const evidence = await store.getEvidence(evidenceId);
+      if (!evidence) return fail('needs_evidence', 'EVIDENCE_RECORD_NOT_FOUND', { missingEvidenceIds: [evidenceId] });
+      if (!(classificationRank[task.dataClassification] >= classificationRank[evidence.classification])) {
+        return fail('refused', 'EVIDENCE_CLASSIFICATION_MISMATCH', { evidenceId });
+      }
+      evidenceBundle.push({
+        evidenceId: evidence.evidence_id,
+        sourceType: evidence.source_type,
+        sourceUrl: evidence.source_url,
+        title: evidence.title,
+        content: evidence.content_text,
+        contentSha256: evidence.content_sha256,
+        classification: evidence.classification,
+        capturedAt: evidence.captured_at,
+      });
+    }
+
     for (const role of roles) {
       if (calls >= task.budget.maxModelCalls) return fail('failed', 'MODEL_CALL_BUDGET_EXHAUSTED');
       const remainingMs = Math.max(1, Math.min(task.budget.timeoutMs, Date.parse(task.expiresAt) - clock().getTime()));
@@ -81,6 +104,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
           role,
           allowedTools,
           evidenceIds: [...task.evidenceIds],
+          evidence: evidenceBundle,
           priorResults: results.map(({ role: priorRole, result }) => ({ role: priorRole, result })),
           reviewOnly: false,
           budget: { ...task.budget, maxTokens: maxTokensPerCall, remainingMs, callNumber: calls },

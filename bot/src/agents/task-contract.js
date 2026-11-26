@@ -31,9 +31,10 @@ function assertString(value, field, max = 256) {
 
 function validateTaskEnvelope(task) {
   if (!isPlainObject(task)) throw new TypeError('task_must_be_object');
-  assertExactKeys(task, ['taskId', 'idempotencyKey', 'requester', 'taskType', 'priority', 'dataClassification', 'approvalPolicy', 'roles', 'allowedTools', 'budget', 'evidenceIds', 'createdAt', 'expiresAt'], 'task');
+  assertExactKeys(task, ['taskId', 'idempotencyKey', 'requester', 'objective', 'taskType', 'priority', 'dataClassification', 'approvalPolicy', 'roles', 'allowedTools', 'budget', 'evidenceIds', 'createdAt', 'expiresAt'], 'task');
   assertString(task.taskId, 'task_id', 100);
   assertString(task.idempotencyKey, 'idempotency_key', 128);
+  assertString(task.objective, 'objective', 4000);
   if (!isPlainObject(task.requester)) throw new TypeError('invalid_requester');
   assertExactKeys(task.requester, ['userId'], 'requester');
   assertString(String(task.requester.userId || ''), 'requester_user_id', 128);

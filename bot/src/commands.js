@@ -548,7 +548,7 @@ function registerCommands(bot) {
   bot.command('evidence_add', async (ctx) => {
     const ownerId = process.env.OWNER_TELEGRAM_ID;
     if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
-    const raw = (ctx.message?.text || '').replace(/^\\/evidence_add(@\\w+)?\\s*/i, '').trim();
+    const raw = (ctx.message?.text || '').replace(/^\/evidence_add(@\w+)?\s*/i, '').trim();
     const parts = raw.split('|');
     if (parts.length < 3) {
       await ctx.reply('الاستخدام: /evidence_add https://source.example/page | عنوان المصدر | النص المقتبس');
@@ -572,7 +572,7 @@ function registerCommands(bot) {
         metadata: { capturedBy: 'owner_telegram', captureMethod: 'manual_excerpt' },
       });
       await ctx.reply(
-        `تم حفظ سجل المصدر.\\nالمعرّف: ${saved.evidence_id}\\nالعنوان: ${saved.title}\\nSHA-256: ${saved.content_sha256}\\nلم يتم جلب الموقع تلقائياً؛ السجل يحتوي النص الذي أرسلته فقط.`
+        `تم حفظ سجل المصدر.\nالمعرّف: ${saved.evidence_id}\nالعنوان: ${saved.title}\nSHA-256: ${saved.content_sha256}\nلم يتم جلب الموقع تلقائياً؛ السجل يحتوي النص الذي أرسلته فقط.`
       );
     } catch (error) {
       console.error('[evidence_add] failed:', error.message);
@@ -593,7 +593,7 @@ function registerCommands(bot) {
       const lines = evidence.map((item) =>
         `- ${item.evidence_id.slice(0, 8)} | ${item.source_type} | ${String(item.title).slice(0, 70)}`
       );
-      await ctx.reply(`N3MAK Evidence — آخر ${evidence.length} سجلات\\n\\n${lines.join('\\n')}`);
+      await ctx.reply(`N3MAK Evidence — آخر ${evidence.length} سجلات\n\n${lines.join('\n')}`);
     } catch (error) {
       console.error('[evidence_list] failed:', error.message);
       await ctx.reply('تعذّر تحميل سجل المصادر.');

@@ -369,5 +369,16 @@ syncBotCommands();
 process.once('uncaughtException', (err) => console.error('[uncaughtException]', err));
 process.once('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
 
-process.once('SIGINT', () => { bot.stop('SIGINT'); process.exit(0); });
-process.once('SIGTERM', () => { bot.stop('SIGTERM'); process.exit(0); });
+function shutdown(signal) {
+  try {
+    // In webhook mode Telegraf polling was never launched, so stop() would throw.
+    if (!PUBLIC_URL) bot.stop(signal);
+  } catch (err) {
+    console.warn('[shutdown] bot stop skipped:', err.message);
+  } finally {
+    process.exit(0);
+  }
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));

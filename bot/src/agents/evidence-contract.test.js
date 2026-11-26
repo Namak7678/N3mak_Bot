@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { canonicalizeSourceUrl, createEvidenceRecord } = require('./evidence-contract');
+const { canonicalizeSourceUrl, createEvidenceRecord, verifyEvidenceRecord } = require('./evidence-contract');
 
 test('canonicalizes web source URLs and strips common tracking parameters', () => {
   assert.equal(
@@ -38,4 +38,17 @@ test('requires a URL for web evidence and bounds stored content', () => {
   assert.throws(() => createEvidenceRecord({
     evidenceId: 'e1', sourceType: 'user_note', title: 'Title', content: 'x'.repeat(20001),
   }), /invalid_evidence_content/);
+});
+
+
+test('verifies evidence digest and detects content tampering', () => {
+  const record = createEvidenceRecord({
+    evidenceId: 'evidence-verify',
+    sourceType: 'user_note',
+    title: 'Captured note',
+    content: 'Original content',
+  });
+  const storedShape = { content_text: record.content, content_sha256: record.contentSha256 };
+  assert.equal(verifyEvidenceRecord(storedShape), true);
+  assert.equal(verifyEvidenceRecord({ ...storedShape, content_text: 'Changed content' }), false);
 });

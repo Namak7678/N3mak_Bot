@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const { pool, initDb, creditDeposit } = require('./db');
-const { checkRateLimit } = require('./redis');
+const { checkRateLimit, redis } = require('./redis');
 const { registerCommands } = require('./commands');
 const { registerRealtorFlow } = require('./realtor-lead'); // ADR-011: /realtor property lead intake
 const { registerCyberReportFlow } = require('./cyber-report-lead'); // N3mak Radar commercial lead intake
@@ -177,7 +177,23 @@ app.use((req, res, next) => {
 app.get('/', (_req, res) => res.send('N3mak bot server is running.'));
 app.get('/api/health', (_req, res) => res.status(200).json({ status: 'ok' }));
 app.get('/health', (_req, res) => res.status(200).json({ status: 'ok', service: 'n3mak-bot' }));
-app.get('/ready', (_req, res) => res.status(200).json({ status: 'ready', service: 'n3mak-bot' }));
+app.get('/ready', async (_req, res) => {
+  const [database, cache] = await Promise.allSettled([
+    pool.query('SELECT 1'),
+    redis ? redis.ping() : Promise.resolve('disabled'),
+  ]);
+  const checks = {
+    database: database.status === 'fulfilled' ? 'ready' : 'unavailable',
+    redis: !redis ? 'disabled' : cache.status === 'fulfilled' ? 'ready' : 'unavailable',
+  };
+  const ready = checks.database === 'ready';
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'not_ready',
+    service: 'n3mak-bot',
+    checks,
+    time: new Date().toISOString(),
+  });
+});
 
 app.get('/api/stats', async (_req, res) => {
   try {

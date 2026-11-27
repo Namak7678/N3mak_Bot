@@ -6,6 +6,10 @@ const blueprints = require('./blueprints');
 const whop = require('./whop');
 const { chat: llmChat, isEnabled: llmEnabled } = require('./llm');
 const trialGw = require('./trial/gateway');
+const { randomUUID } = require('crypto');
+const agentTaskStore = require('./agents/agent-task-store');
+const { createOrchestrator } = require('./agents/orchestrator');
+const { runN3makAgent } = require('./agents/llm-agent-adapter');
 
 const MARKETS = ['🇺🇸 US', '🇪🇺 Europe', '🇦🇪 GCC', '🇬🇧 UK', '🇷🇺 Russia', '🌍 Africa'];
 
@@ -211,7 +215,7 @@ function registerCommands(bot) {
 
     if (isCyberReportEntry) {
       await ctx.reply(
-        '🛡 <b>N3mak Cyber Risk Intelligence</b>\\n\\nاطلب تقريراً دفاعياً عن إشارات التعرض المنشورة علناً أو مراقبة دورية. لا نطلب كلمات مرور أو بيانات مسروقة.\\n\\nاستخدم /cyberreport لبدء الطلب.',
+        '🛡 <b>N3mak Cyber Risk Intelligence</b>\n\nاطلب تقريراً دفاعياً عن إشارات التعرض المنشورة علناً أو مراقبة دورية. لا نطلب كلمات مرور أو بيانات مسروقة.\n\nاستخدم /cyberreport لبدء الطلب.',
         { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: '📝 Start report request', callback_data: 'cyberreport:start' }], [{ text: '🌐 Services & pricing', url: 'https://namak7678.github.io/n3mak-radar/services.html' }]] } }
       );
       return;
@@ -299,9 +303,9 @@ function registerCommands(bot) {
       const key = data.key;
       const expires = data.expires_at || '24h';
       const curl = [
-        'curl ' + base + '/chat/completions \\\n',
-        '  -H "Authorization: Bearer ' + key + '" \\\n',
-        '  -H "Content-Type: application/json" \\\n',
+        'curl ' + base + '/chat/completions \\n',
+        '  -H "Authorization: Bearer ' + key + '" \\n',
+        '  -H "Content-Type: application/json" \\n',
         '  -d \'{"model":"gpt-oss-20b","messages":[{"role":"user","content":"Hello"}]}\'',
       ].join('');
       const already = data.already ? '\n(مفتاح تجربتك الحالي لا يزال صالحاً — هذا رابط الاستخدام)' : '';
@@ -475,6 +479,295 @@ function registerCommands(bot) {
     } catch (err) {
       console.error('[llm] ask failed (soft):', err.message);
       await ctx.reply('الذكاء غير متاح مؤقتاً. جرّب لاحقاً أو /support.');
+    }
+  });
+
+
+  // Owner-only workforce pilot. The model may draft and review; no tool action is executed.
+  bot.command('agents', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    const rawTask = (ctx.message?.text || '').replace(/^\/agents(@\w+)?\s*/i, '').trim();
+    const evidenceMatch = rawTask.match(/^--evidence\s+([a-f0-9,-]+)\s+([\s\S]+)$/i);
+    const evidenceIds = evidenceMatch ? evidenceMatch[1].split(',').filter(Boolean) : [];
+    const objective = evidenceMatch ? evidenceMatch[2].trim() : rawTask;
+    if (evidenceIds.length > 10) {
+      await ctx.reply('الحد الأقصى 10 مصادر لكل مهمة.');
+      return;
+    }
+    if (!objective) {
+      await ctx.reply('الاستخدام: /agents [--evidence id1,id2 | --research] المهمة المطلوب إعدادها ومراجعتها');
+      return;
+    }
+    if (objective.length > 4000) {
+      await ctx.reply('المهمة طويلة جداً. الحد الأقصى 4000 حرف.');
+      return;
+    }
+    if (!llmEnabled()) {
+      await ctx.reply('محرك الذكاء غير متاح حالياً؛ لم يتم إنشاء المهمة.');
+      return;
+    }
+    try {
+      await agentTaskStore.ensureSchema();
+      const now = new Date();
+      const task = {
+        taskId: randomUUID(),
+        idempotencyKey: `telegram:${ctx.from.id}:${ctx.message.message_id}`,
+        requester: { userId: `telegram:${ctx.from.id}` },
+        objective,
+        taskType: 'operations',
+        priority: 'normal',
+        dataClassification: 'internal',
+        approvalPolicy: 'human_required',
+        roles: ['secretary', 'reviewer'],
+        allowedTools: ['report:draft', 'audit:read'],
+        budget: { maxTokens: 2400, timeoutMs: 45000, maxModelCalls: 2 },
+        evidenceIds,
+        ...(researchObjective ? { researchBrief: { questions: [{ id: 'main', question: researchObjective.slice(0, 500), required: true }] } } : {}),
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
+      };
+      const orchestrator = createOrchestrator({ store: agentTaskStore, runAgent: runN3makAgent });
+      const submitted = await orchestrator.submit(task);
+      if (!submitted.created) {
+        await ctx.reply(`هذه المهمة مسجلة مسبقاً: ${submitted.task.task_id} — الحالة: ${submitted.task.status}`);
+        return;
+      }
+      await ctx.sendChatAction('typing').catch(() => {});
+      const result = await orchestrator.run(task.taskId);
+      let text;
+      if (result.status === 'completed') {
+        const claims = Array.isArray(result.verifiedClaims) ? result.verifiedClaims : [];
+        const claimLines = claims.map((claim, index) =>
+          `${index + 1}. ${claim.text}\n   الأدلة: ${claim.evidenceIds.join(', ')}`
+        );
+        const sourceLines = (result.evidenceReferences || []).map((source) =>
+          `• ${source.title} [${source.evidenceId}]\n  ${source.sourceUrl || 'مصدر داخلي'}\n  SHA-256: ${source.contentSha256}`
+        );
+        const sourceAssessment = result.sourceAssessment || {};
+        const sourceWarnings = Array.isArray(sourceAssessment.warnings) ? sourceAssessment.warnings : [];
+        const sourceAssessmentLine = `\nتقييم تنوع المصادر: ${sourceAssessment.evidenceCount ?? 0} سجل، ${sourceAssessment.uniqueWebHostCount ?? 0} نطاق ويب${sourceWarnings.length ? ' — تنبيهات: ' + sourceWarnings.join(', ') : ''}`;
+        const researchCoverage = result.researchCoverage;
+        const researchCoverageLine = researchCoverage
+          ? `\nتغطية أسئلة البحث: ${researchCoverage.coveredQuestions}/${researchCoverage.totalQuestions} — مكتملة`
+          : '';
+        const contradictionReview = result.contradictionReview || {};
+        const contradictionLine = `\nمراجعة التعارضات: ${contradictionReview.candidateCount || 0} أزواج تحتاج مراجعة` + (contradictionReview.truncated ? ' — القائمة مختصرة بسبب الحد' : '');
+        const supportReview = result.evidenceSupportReview || {};
+        const weakSupportCount = Array.isArray(supportReview.reviews)
+          ? supportReview.reviews.filter((item) => item.status !== 'text_overlap_signal').length
+          : 0;
+        const supportLine = `\nفحص ارتباط الادعاءات بالأدلة: ${supportReview.reviewCount || 0} مراجعة، ${weakSupportCount} تحتاج تدقيقاً يدوياً`;
+        const draftLines = (result.agentDrafts || []).map((draft) =>
+          `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
+        );
+        const actionLines = (result.agentResults || []).flatMap((agent) =>
+          (agent.proposedActionDecisions || []).map((action) =>
+            `• ${agent.role}: ${action.tool} — ${action.policyAllowed ? 'مسموح وفق السياسة، لكن التنفيذ معطل' : 'محجوب (' + action.reason + ')'}`
+          )
+        );
+        text = [
+          result.summary || 'اكتملت المهمة.',
+          claims.length ? '\nالنتائج المدعومة بالأدلة:\n' + claimLines.join('\n\n')
+            : '\nلم ينتج الفريق ادعاءات موثقة بالأدلة؛ لا تُعرض المسودات كحقائق.',
+          sourceLines.length ? '\n\nسجل المصادر المرتبطة:\n' + sourceLines.join('\n\n') : '',
+          sourceAssessmentLine,
+          researchCoverageLine,
+          contradictionLine,
+          supportLine,
+          actionLines.length ? '\n\nمقترحات الأدوات (لم يُنفذ أي منها):\n' + actionLines.join('\n') : '',
+          draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
+        ].join('');
+      } else {
+        const gapPlan = result.researchGapPlan;
+        const gapLines = Array.isArray(gapPlan?.queries)
+          ? gapPlan.queries.map((item) => '• ' + item.query).join('\\n')
+          : '';
+        const unanswered = result.researchCoverage?.unansweredRequired || [];
+        text = 'حالة المهمة: ' + result.status + '\\nالسبب: ' + (result.code || result.error || 'غير محدد') +
+          (unanswered.length ? '\\nالأسئلة غير المجابة: ' + unanswered.join(', ') : '') +
+          (gapLines ? '\\nاستعلامات متابعة مقترحة (لم تُنفذ):\\n' + gapLines : '');
+      }
+      await ctx.reply(`N3MAK Workforce — ${result.status}\n\n${text.slice(0, 3500)}\n\nلم يتم تنفيذ أي إجراء خارجي.`);
+    } catch (error) {
+      console.error('[agents] task failed:', error.code || error.message);
+      await ctx.reply('تعذّر تشغيل فريق الوكلاء. لم يتم تنفيذ أي إجراء خارجي.');
+    }
+  });
+
+
+  bot.command('evidence_add', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    const raw = (ctx.message?.text || '').replace(/^\/evidence_add(@\w+)?\s*/i, '').trim();
+    const parts = raw.split('|');
+    if (parts.length < 3) {
+      await ctx.reply('الاستخدام: /evidence_add https://source.example/page | عنوان المصدر | النص المقتبس');
+      return;
+    }
+    const [sourceUrl, title, ...contentParts] = parts;
+    const content = contentParts.join('|').trim();
+    if (raw.length > 3500 || !content) {
+      await ctx.reply('النص غير صالح أو طويل. الحد الأقصى للرسالة 3500 حرف.');
+      return;
+    }
+    try {
+      await agentTaskStore.ensureSchema();
+      const saved = await agentTaskStore.saveEvidence({
+        evidenceId: randomUUID(),
+        sourceType: 'web',
+        sourceUrl: sourceUrl.trim(),
+        title: title.trim(),
+        content,
+        classification: 'public',
+        metadata: { capturedBy: 'owner_telegram', captureMethod: 'manual_excerpt' },
+      });
+      await ctx.reply(
+        `تم حفظ سجل المصدر.\nالمعرّف: ${saved.evidence_id}\nالعنوان: ${saved.title}\nSHA-256: ${saved.content_sha256}\nلم يتم جلب الموقع تلقائياً؛ السجل يحتوي النص الذي أرسلته فقط.`
+      );
+    } catch (error) {
+      console.error('[evidence_add] failed:', error.message);
+      await ctx.reply('تعذّر حفظ المصدر. تحقق من الرابط والعنوان والنص.');
+    }
+  });
+
+  bot.command('evidence_list', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    try {
+      await agentTaskStore.ensureSchema();
+      const evidence = await agentTaskStore.listRecentEvidence({ limit: 10 });
+      if (!evidence.length) {
+        await ctx.reply('لا توجد مصادر محفوظة بعد.');
+        return;
+      }
+      const lines = evidence.map((item) =>
+        `- ${item.evidence_id} | ${item.source_type} | ${String(item.title).slice(0, 70)}`
+      );
+      await ctx.reply(`N3MAK Evidence — آخر ${evidence.length} سجلات\n\n${lines.join('\n')}`);
+    } catch (error) {
+      console.error('[evidence_list] failed:', error.message);
+      await ctx.reply('تعذّر تحميل سجل المصادر.');
+    }
+  });
+
+  bot.command('agents_task', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    const taskId = (ctx.message?.text || '').replace(/^\/agents_task(@\w+)?\s*/i, '').trim();
+    if (!/^[a-f0-9-]{16,100}$/i.test(taskId)) {
+      await ctx.reply('الاستخدام: /agents_task معرف_المهمة');
+      return;
+    }
+    try {
+      await agentTaskStore.ensureSchema();
+      const task = await agentTaskStore.getTask(taskId);
+      if (!task) {
+        await ctx.reply('لم يتم العثور على المهمة.');
+        return;
+      }
+      const events = await agentTaskStore.getTaskEvents(taskId, { limit: 12 });
+      const created = task.created_at ? new Date(task.created_at).toISOString() : 'غير متاح';
+      const updated = task.updated_at ? new Date(task.updated_at).toISOString() : 'غير متاح';
+      const summary = task.result?.summary || task.result?.review?.summary ||
+        task.result?.code || task.error?.code || 'لا توجد نتيجة محفوظة';
+      const claims = Array.isArray(task.result?.verifiedClaims) ? task.result.verifiedClaims : [];
+      const claimLines = claims.slice(0, 6).map((claim, index) =>
+        (index + 1) + '. ' + String(claim.text).slice(0, 240) +
+        '\n   الأدلة: ' + (Array.isArray(claim.evidenceIds) ? claim.evidenceIds.join(', ') : 'غير محدد')
+      );
+      const sources = Array.isArray(task.result?.evidenceReferences) ? task.result.evidenceReferences : [];
+      const sourceAssessment = task.result?.sourceAssessment || {};
+      const contradictionReview = task.result?.contradictionReview || {};
+      const supportReview = task.result?.evidenceSupportReview || {};
+      const sourceWarnings = Array.isArray(sourceAssessment.warnings) ? sourceAssessment.warnings : [];
+      const sourceLines = sources.slice(0, 6).map((source) =>
+        '- ' + source.title + ' [' + source.evidenceId + ']' +
+        (source.sourceUrl ? '\n  ' + source.sourceUrl : '') +
+        '\n  SHA-256: ' + String(source.contentSha256 || '').slice(0, 16) + '…'
+      );
+      const blockedCount = Array.isArray(task.result?.agentResults)
+        ? task.result.agentResults.reduce((total, agent) => total + (agent.blockedActions || []).length, 0)
+        : 0;
+      const history = events.reverse().map((event) => {
+        const at = event.created_at ? new Date(event.created_at).toISOString().slice(0, 16) : '';
+        const payload = event.payload && typeof event.payload === 'object'
+          ? Object.entries(event.payload).slice(0, 5)
+            .map(([key, value]) => key + '=' + String(value).slice(0, 90))
+            .join(', ')
+          : '';
+        return '- ' + at + ' | ' + event.event_type + ' | ' + event.actor + (payload ? ' | ' + payload : '');
+      }).join('\n') || 'لا توجد أحداث مسجلة';
+      await ctx.reply([
+        'المهمة: ' + task.task_id,
+        'الحالة: ' + task.status,
+        'الإنشاء: ' + created,
+        'آخر تحديث: ' + updated,
+        'النتيجة: ' + String(summary).slice(0, 700),
+        claims.length ? '\nالادعاءات المعتمدة بالأدلة:\n' + claimLines.join('\n') : '\nلا توجد ادعاءات موثقة محفوظة.',
+        sourceLines.length ? '\nالمصادر:\n' + sourceLines.join('\n') : '',
+        sourceAssessment.evidenceCount !== undefined
+          ? '\nتقييم تنوع المصادر: ' + sourceAssessment.evidenceCount + ' سجل، ' + (sourceAssessment.uniqueWebHostCount || 0) + ' نطاق ويب' + (sourceWarnings.length ? ' — ' + sourceWarnings.join(', ') : '')
+          : '',
+        task.result?.contradictionReview
+          ? '\nأزواج التعارضات قيد المراجعة: ' + (contradictionReview.candidateCount || 0)
+          : '',
+        task.result?.evidenceSupportReview
+          ? '\nتدقيق ارتباط الأدلة: ' + (supportReview.reviewCount || 0) + ' مراجعة؛ لا توجد أحكام دلالية آلية'
+          : '',
+        blockedCount ? '\nالطلبات المحجوبة: ' + blockedCount : '',
+        '',
+        'سجل الأحداث:',
+        history,
+      ].join('\n'));
+    } catch (error) {
+      console.error('[agents_task] failed:', error.message);
+      await ctx.reply('تعذّر تحميل تفاصيل المهمة حالياً.');
+    }
+  });
+
+  bot.command('agents_recover', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    try {
+      await agentTaskStore.ensureSchema();
+      const expired = await agentTaskStore.expireOverdueTasks();
+      await ctx.reply(
+        expired.length
+          ? `تم إغلاق ${expired.length} مهمة منتهية الصلاحية وتسجيلها في سجل التدقيق. لم تتم إعادة تشغيلها تلقائياً.`
+          : 'لا توجد مهام منتهية الصلاحية تحتاج إلى معالجة.'
+      );
+    } catch (error) {
+      console.error('[agents_recover] failed:', error.message);
+      await ctx.reply('تعذّرت معالجة المهام المنتهية حالياً.');
+    }
+  });
+
+  bot.command('agents_status', async (ctx) => {
+    const ownerId = process.env.OWNER_TELEGRAM_ID;
+    if (!ownerId || String(ctx.from?.id) !== String(ownerId)) return;
+    try {
+      await agentTaskStore.ensureSchema();
+      await agentTaskStore.expireOverdueTasks();
+      const [tasks, counts] = await Promise.all([
+        agentTaskStore.listRecentTasks({ limit: 8 }),
+        agentTaskStore.getTaskStatusCounts(),
+      ]);
+      const countMap = Object.fromEntries(counts.map((row) => [row.status, Number(row.count) || 0]));
+      const total = Object.values(countMap).reduce((sum, count) => sum + count, 0);
+      const overview = `الإجمالي: ${total} | قيد التنفيذ: ${countMap.running || 0} | بالانتظار: ${countMap.queued || 0} | مكتملة: ${countMap.completed || 0} | تحتاج أدلة: ${countMap.needs_evidence || 0} | فاشلة: ${countMap.failed || 0} | مرفوضة: ${countMap.refused || 0}`;
+      if (!tasks.length) {
+        await ctx.reply('N3MAK Workforce\n' + overview + '\n\nلا توجد مهام مسجلة بعد.');
+        return;
+      }
+      const lines = tasks.map((task) => {
+        const created = new Date(task.created_at).toISOString().replace('T', ' ').slice(0, 16);
+        return `• ${task.status} | ${task.task_type} | ${task.task_id} | ${created}`;
+      });
+      await ctx.reply('N3MAK Workforce — آخر ' + tasks.length + ' مهام\n' + overview + '\n\n' + lines.join('\n'));
+    } catch (error) {
+      console.error('[agents_status] failed:', error.message);
+      await ctx.reply('تعذّر تحميل سجل المهام حالياً.');
     }
   });
 

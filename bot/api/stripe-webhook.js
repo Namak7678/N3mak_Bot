@@ -48,7 +48,14 @@ async function handler(req, res) {
     return res.status(200).json({ received: true, ignored: 'payment_not_paid' });
   }
 
-  const telegramId = Number(session.metadata?.telegram_id);
+  // The shared Stripe account also serves the N3mak API subscription checkout.
+  // Only deposit sessions created by this Telegram bot carry telegram_id.
+  // Acknowledge other paid sessions so Stripe does not retry them as failed bot deposits.
+  if (!session.metadata?.telegram_id) {
+    return res.status(200).json({ received: true, ignored: 'not_bot_deposit' });
+  }
+
+  const telegramId = Number(session.metadata.telegram_id);
   const amountUsd = Number(session.amount_total) / 100;
   if (!Number.isSafeInteger(telegramId) || telegramId <= 0 || !session.id || !Number.isFinite(amountUsd) || amountUsd <= 0) {
     console.error('[stripe webhook] invalid paid checkout session metadata');

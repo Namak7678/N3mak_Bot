@@ -134,3 +134,14 @@ The planner is deliberately planning-only: it does not call a search engine, dow
 Automated web retrieval is not yet wired to this loop. It must be added only through a configured, policy-approved search adapter that returns source metadata and captured passages into the existing immutable evidence store, with duplicate-host/URL checks and the task's shared deadline/budget enforced. Until that adapter exists, this stage is query generation, not autonomous deep research.
 
 Offline tests cover query generation, exclusion of previously seen hosts, the hard eight-query limit, and the explicit no-network contract. CI must verify the final branch head.
+
+## Research source intake and evidence-store handoff
+
+The next research block adds `research-source-intake.js`:
+- Canonicalizes HTTPS source URLs, rejects credentials and non-HTTPS URLs, removes tracking parameters/fragments.
+- Deduplicates candidates against existing evidence URLs/hosts and against the current batch.
+- Bounds each batch to eight candidates, title to 300 characters, excerpt to 5,000 characters, and computes a SHA-256 passage digest.
+- Marks every normalized result `candidate_unverified`; retrieved text is explicitly untrusted.
+- Provides an explicit `persistResearchCandidates` handoff to the existing immutable evidence store. Stored metadata identifies the material as an unverified search-result excerpt; persistence is not verification.
+
+This module does **not** make a network request or silently write to the database. A configured search provider must supply candidate result objects, and a caller must explicitly invoke the store handoff. Provider integration, live retrieval, page-level extraction, and task-budget orchestration remain the next stage.

@@ -208,6 +208,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       verifiedClaims,
       evidenceReferences,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),
+      agentResults: results.map(({ role, blockedActions }) => ({ role, blockedActions })),
       review: finalReview,
       modelCalls: calls,
       sideEffectsExecuted: 0,

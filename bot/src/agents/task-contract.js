@@ -31,7 +31,7 @@ function assertString(value, field, max = 256) {
 
 function validateTaskEnvelope(task) {
   if (!isPlainObject(task)) throw new TypeError('task_must_be_object');
-  assertExactKeys(task, ['taskId', 'idempotencyKey', 'requester', 'objective', 'taskType', 'priority', 'dataClassification', 'approvalPolicy', 'roles', 'allowedTools', 'budget', 'evidenceIds', 'createdAt', 'expiresAt'], 'task');
+  assertExactKeys(task, ['taskId', 'idempotencyKey', 'requester', 'objective', 'taskType', 'priority', 'dataClassification', 'approvalPolicy', 'roles', 'allowedTools', 'budget', 'evidenceIds', 'researchBrief', 'createdAt', 'expiresAt'], 'task');
   assertString(task.taskId, 'task_id', 100);
   assertString(task.idempotencyKey, 'idempotency_key', 128);
   assertString(task.objective, 'objective', 4000);
@@ -70,6 +70,25 @@ function validateTaskEnvelope(task) {
       task.evidenceIds.some((id) => typeof id !== 'string' || !id.trim() || id.length > 160)) {
     throw new TypeError('invalid_evidence_ids_max_10');
   }
+  if (task.researchBrief !== undefined) {
+    if (!isPlainObject(task.researchBrief)) throw new TypeError('invalid_research_brief');
+    assertExactKeys(task.researchBrief, ['questions'], 'research_brief');
+    const questions = task.researchBrief.questions;
+    if (!Array.isArray(questions) || questions.length < 1 || questions.length > 8) {
+      throw new TypeError('invalid_research_questions');
+    }
+    const ids = new Set();
+    for (const question of questions) {
+      if (!isPlainObject(question)) throw new TypeError('invalid_research_question');
+      assertExactKeys(question, ['id', 'question', 'required'], 'research_question');
+      if (typeof question.id !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(question.id) || ids.has(question.id)) {
+        throw new TypeError('invalid_or_duplicate_research_question_id');
+      }
+      ids.add(question.id);
+      assertString(question.question, 'research_question_text', 500);
+      if (typeof question.required !== 'boolean') throw new TypeError('invalid_research_question_required');
+    }
+  }
   if (!isIsoDate(task.createdAt) || !isIsoDate(task.expiresAt) ||
       Date.parse(task.expiresAt) <= Date.parse(task.createdAt)) {
     throw new TypeError('invalid_task_dates');
@@ -85,11 +104,19 @@ function validateAgentResult(result) {
   if (!Array.isArray(result.claims) || result.claims.length > 100) throw new TypeError('invalid_claims');
   for (const claim of result.claims) {
     if (!isPlainObject(claim)) throw new TypeError('invalid_claim');
-    assertExactKeys(claim, ['text', 'evidenceIds'], 'claim');
+    assertExactKeys(claim, ['text', 'evidenceIds', 'questionIds'], 'claim');
     assertString(claim.text, 'claim_text', 1200);
     if (!Array.isArray(claim.evidenceIds) ||
         claim.evidenceIds.some((id) => typeof id !== 'string' || !id.trim())) {
       throw new TypeError('invalid_claim_evidence');
+    }
+    if (claim.questionIds !== undefined &&
+        (!Array.isArray(claim.questionIds) || claim.questionIds.length > 8 ||
+         claim.questionIds.some((id) => typeof id !== 'string' || !id.trim()))) {
+      throw new TypeError('invalid_claim_question_ids');
+    }
+    if (claim.questionIds && new Set(claim.questionIds).size !== claim.questionIds.length) {
+      throw new TypeError('duplicate_claim_question_ids');
     }
   }
   if (!Array.isArray(result.proposedActions) || result.proposedActions.length > 20) {

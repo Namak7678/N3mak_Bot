@@ -4,7 +4,9 @@ const DEFAULT_MAX_QUERIES = 8;
 const HARD_MAX_QUERIES = 8;
 
 function safeText(value, max = 500) {
-  return typeof value === 'string' ? value.trim().replace(/\\s+/g, ' ').slice(0, max) : '';
+  return typeof value === 'string'
+    ? value.trim().split(' ').filter(Boolean).join(' ').slice(0, max)
+    : '';
 }
 
 function buildResearchGapPlan({
@@ -36,7 +38,9 @@ function buildResearchGapPlan({
     }
   }
   for (const candidate of (contradictionReview.candidates || [])) {
-    const qids = Array.isArray(candidate.sharedQuestionIds) ? candidate.sharedQuestionIds : (Array.isArray(candidate.questionIds) ? candidate.questionIds : []);
+    const qids = Array.isArray(candidate.sharedQuestionIds)
+      ? candidate.sharedQuestionIds
+      : (Array.isArray(candidate.questionIds) ? candidate.questionIds : []);
     const linked = qids.map((id) => questionById.get(id)).filter(Boolean);
     const prompt = linked.length ? linked.map((q) => safeText(q.question)).join(' ; ') : '';
     if (prompt) gaps.push({ gapType: 'contradiction_candidate', questionIds: qids, prompt, priority: 'review' });
@@ -50,7 +54,11 @@ function buildResearchGapPlan({
     return true;
   });
   const excludedHosts = [...new Set(evidenceBundle.map((e) => {
-    try { return new URL(e.sourceUrl).hostname.toLowerCase().replace(/^www\\./, ''); } catch { return ''; }
+    try {
+      let host = new URL(e.sourceUrl).hostname.toLowerCase();
+      if (host.startsWith('www.')) host = host.slice(4);
+      return host;
+    } catch { return ''; }
   }).filter(Boolean))].sort();
   const queries = uniqueGaps.slice(0, cap).map((gap, index) => ({
     queryId: 'gap-' + String(index + 1).padStart(2, '0'),

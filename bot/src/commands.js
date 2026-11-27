@@ -546,6 +546,10 @@ function registerCommands(bot) {
         const sourceAssessment = result.sourceAssessment || {};
         const sourceWarnings = Array.isArray(sourceAssessment.warnings) ? sourceAssessment.warnings : [];
         const sourceAssessmentLine = `\nتقييم تنوع المصادر: ${sourceAssessment.evidenceCount ?? 0} سجل، ${sourceAssessment.uniqueWebHostCount ?? 0} نطاق ويب${sourceWarnings.length ? ' — تنبيهات: ' + sourceWarnings.join(', ') : ''}`;
+        const researchCoverage = result.researchCoverage;
+        const researchCoverageLine = researchCoverage
+          ? `\nتغطية أسئلة البحث: ${researchCoverage.coveredQuestions}/${researchCoverage.totalQuestions} — مكتملة`
+          : '';
         const draftLines = (result.agentDrafts || []).map((draft) =>
           `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
         );
@@ -560,6 +564,7 @@ function registerCommands(bot) {
             : '\nلم ينتج الفريق ادعاءات موثقة بالأدلة؛ لا تُعرض المسودات كحقائق.',
           sourceLines.length ? '\n\nسجل المصادر المرتبطة:\n' + sourceLines.join('\n\n') : '',
           sourceAssessmentLine,
+          researchCoverageLine,
           actionLines.length ? '\n\nمقترحات الأدوات (لم يُنفذ أي منها):\n' + actionLines.join('\n') : '',
           draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
         ].join('');

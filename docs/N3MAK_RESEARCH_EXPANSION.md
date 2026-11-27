@@ -114,3 +114,12 @@ The Workforce Control Core now creates a bounded review queue from reviewer-appr
 This is candidate generation only. It does not infer a contradiction from wording, shared citations, polarity terms, or model output. It produces no semantic verdict and no confidence score. Candidate generation is capped at 100 pairs per task; truncation is explicit. The orchestrator includes the review queue in the durable result and writes an audit event with the candidate count. Completion is not blocked solely because candidates exist; unresolved candidates must be reviewed before a human relies on the findings.
 
 Offline tests cover shared-question candidate generation, no false inference from shared evidence alone, input bounds, and pair truncation. Semantic contradiction classification and targeted follow-up research remain future, separately evaluated stages.
+
+
+## Evidence-to-passage support audit — implementation status
+
+The orchestrator now performs a bounded lexical overlap pass between each reviewer-approved claim and each evidence record cited by that claim. The output is a navigation aid for reviewers: `text_overlap_signal`, `weak_text_overlap`, or `missing_evidence`, with matched terms and a bounded overlap ratio. It is capped at 100 claim/evidence pairs and records truncation.
+
+This does not establish semantic entailment or truth. Token overlap can miss paraphrases, negation, dates, units, scope and context; matching words can also occur in irrelevant passages. The result explicitly reports zero semantic verdicts and is not a completion gate. The audit summary is appended to the task audit log and returned in the durable task result alongside contradiction candidates.
+
+Offline tests cover positive lexical overlap, weak overlap, missing evidence, pair bounds and result integration. The orchestrator regression test asserts both review structures are returned. Runtime execution and CI on the latest branch head remain pending.

@@ -718,7 +718,7 @@ function registerCommands(bot) {
       const total = Object.values(countMap).reduce((sum, count) => sum + count, 0);
       const overview = `الإجمالي: ${total} | قيد التنفيذ: ${countMap.running || 0} | بالانتظار: ${countMap.queued || 0} | مكتملة: ${countMap.completed || 0} | تحتاج أدلة: ${countMap.needs_evidence || 0} | فاشلة: ${countMap.failed || 0} | مرفوضة: ${countMap.refused || 0}`;
       if (!tasks.length) {
-        await ctx.reply('N3MAK Workforce\\n' + overview + '\\n\\nلا توجد مهام مسجلة بعد.');
+        await ctx.reply('N3MAK Workforce\n' + overview + '\n\nلا توجد مهام مسجلة بعد.');
         return;
       }
       const lines = tasks.map((task) => {

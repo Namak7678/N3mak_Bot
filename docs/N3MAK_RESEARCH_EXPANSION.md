@@ -101,3 +101,7 @@ When a brief is supplied, the orchestrator refuses to mark the task `completed` 
 This is deliberately a minimum, deterministic gate. It does not yet support `partial` or `contradicted` statuses, semantic entailment, or automatic gap-search retries. A question marked covered means at least one reviewer-approved claim is linked to it and cites an evidence ID; it does not prove that the cited passage semantically answers the question. Those stronger judgments require separate evaluation and must remain reviewer-assisted.
 
 Offline unit tests were added for question mapping, unknown question IDs, evidence-free claims, required-question blocking, and successful coverage. CI must still run against the exact branch head before this implementation is treated as verified.
+
+### Agent contract integration
+
+The LLM adapter now receives the research brief and an output schema that asks each claim to identify exact question IDs. Its instructions prohibit invented IDs and direct the agent to request more evidence when required questions remain unanswered. The orchestrator remains authoritative: model-reported coverage is not trusted; it recomputes coverage from reviewer-approved claims and stored evidence references. Adapter regression tests verify the brief and mapping contract are sent to the model.

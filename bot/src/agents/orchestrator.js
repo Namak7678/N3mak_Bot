@@ -5,6 +5,7 @@ const { getRoleCapabilities } = require('./registry');
 const { evaluateToolRequest } = require('./policy-gate');
 const { verifyEvidenceRecord, assessEvidenceDiversity } = require('./evidence-contract');
 const { assessQuestionCoverage } = require('./research-coverage');
+const { assessContradictionCandidates } = require('./contradiction-review');
 
 const TERMINAL = new Set(['completed', 'needs_evidence', 'refused', 'failed']);
 
@@ -224,6 +225,12 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       ? finalReview.claims
       : results.flatMap(({ result: agentResult }) => agentResult.claims);
     const verifiedEvidenceIds = [...new Set(verifiedClaims.flatMap((claim) => claim.evidenceIds))];
+    const contradictionReview = assessContradictionCandidates(verifiedClaims, { maxPairs: 100 });
+    await store.appendEvent(taskId, {
+      type: 'research.contradiction_candidates.generated',
+      actor: 'orchestrator',
+      payload: { candidateCount: contradictionReview.candidateCount, truncated: contradictionReview.truncated, verdictsProduced: 0 },
+    });
     let researchCoverage = null;
     if (task.researchBrief) {
       try {

@@ -1,6 +1,6 @@
 'use strict';
 
-const { createHash } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 
 const MAX_RESULTS = 8;
 const MAX_TITLE = 300;
@@ -96,4 +96,45 @@ function normalizeSearchCandidates(results, {
   };
 }
 
-module.exports = { canonicalizeSourceUrl, normalizeSearchCandidates };
+
+async function persistResearchCandidates({ candidates, store, taskId, now = () => new Date() } = {}) {
+  if (!Array.isArray(candidates) || candidates.length > MAX_RESULTS) {
+    throw new TypeError('invalid_research_candidates');
+  }
+  if (!store || typeof store.saveEvidence !== 'function') {
+    throw new TypeError('evidence_store_required');
+  }
+  if (typeof taskId !== 'string' || !taskId.trim() || taskId.length > 160) {
+    throw new TypeError('invalid_research_task_id');
+  }
+  const stored = [];
+  for (const candidate of candidates) {
+    if (!candidate || candidate.status !== 'candidate_unverified') {
+      throw new TypeError('only_unverified_normalized_candidates_can_be_saved');
+    }
+    const sourceUrl = canonicalizeSourceUrl(candidate.sourceUrl);
+    if (!sourceUrl || typeof candidate.title !== 'string' || typeof candidate.excerpt !== 'string' ||
+        !candidate.title.trim() || !candidate.excerpt.trim() || candidate.excerpt.length > MAX_EXCERPT) {
+      throw new TypeError('invalid_research_candidate');
+    }
+    const record = await store.saveEvidence({
+      evidenceId: randomUUID(),
+      sourceType: 'web',
+      sourceUrl,
+      title: candidate.title.slice(0, MAX_TITLE),
+      content: candidate.excerpt,
+      classification: 'public',
+      metadata: {
+        taskId,
+        intakeStatus: 'unverified_search_result_excerpt',
+        sourceHost: new URL(sourceUrl).hostname,
+        providerCapturedAt: candidate.capturedAt || null,
+        excerptSha256: createHash('sha256').update(candidate.excerpt.trim(), 'utf8').digest('hex(),
+      },
+    });
+    stored.push({ evidenceId: record.evidence_id || record.evidenceId, sourceUrl, status: 'stored_unverified' });
+  }
+  return { storedCount: stored.length, stored, note: 'Saved excerpts remain unverified source material; storage does not establish factual support.' };
+}
+
+module.exports = { canonicalizeSourceUrl, normalizeSearchCandidates, persistResearchCandidates };

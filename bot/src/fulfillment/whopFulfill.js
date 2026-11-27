@@ -52,7 +52,7 @@ const OMNI_ADMIN_BASE = (
 ).replace(/\/$/, '');
 
 function isAllowedPlan(planId) {
-  if (!planId) return true; // some events omit plan — still fulfill
+  if (!planId) return false; // some events omit plan — still fulfill
   if (String(planId).includes('UKIjanDMOoEGV')) return false;
   return ALLOWED_PLANS.has(String(planId));
 }

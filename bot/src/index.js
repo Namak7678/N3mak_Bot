@@ -263,6 +263,7 @@ if (PUBLIC_URL) {
 try {
   const { fulfillMembership, isAllowedPlan } = require('./fulfillment/whopFulfill');
   const { verifyWhopSignature } = require('./fulfillment/whopVerify');
+  const { isWhopActivationEvent } = require('./fulfillment/whopEvents');
   app.post('/webhooks/whop', express.raw({ type: '*/*' }), async (req, res) => {
     const raw = Buffer.isBuffer(req.body)
       ? req.body
@@ -280,18 +281,18 @@ try {
     }
     try {
       const body = JSON.parse(raw.toString('utf8'));
-      const action = body?.action || body?.type || '';
-      const data = body?.data || body;
-      const planId = data?.plan_id || data?.plan?.id || data?.plan || '';
-      const membershipId = data?.id || data?.membership_id || data?.membership?.id;
-      if (!membershipId) return res.status(200).json({ ok: true, skipped: 'no membership' });
-      if (planId && !isAllowedPlan(planId)) {
-        return res.status(200).json({ ok: true, skipped: 'other plan', planId });
+      const action = String(body?.action || body?.type || '').trim().toLowerCase();
+      const data = body?.data || {};
+      if (!isWhopActivationEvent(action)) {
+        return res.status(200).json({ ok: true, skipped: 'unsupported_event', event: action || 'missing' });
       }
-      // Only fulfill activation / payment success style events when type is present
-      const t = String(action || '');
-      if (t && !/(membership\.activated|payment\.succeeded|membership_activated)/i.test(t) && !data?.plan_id && !data?.membership_id) {
-        // still allow legacy payloads that omit type but include membership id
+      const membershipEvent = ['membership.activated', 'membership.went_valid', 'membership_activated'].includes(action);
+      const membershipId = data?.membership_id || data?.membership?.id || (membershipEvent ? data?.id : null);
+      const planId = data?.plan_id || data?.plan?.id || data?.plan || '';
+      if (!membershipId) return res.status(200).json({ ok: true, skipped: 'no membership' });
+      if (!planId) return res.status(200).json({ ok: true, skipped: 'missing plan' });
+      if (!isAllowedPlan(planId)) {
+        return res.status(200).json({ ok: true, skipped: 'other plan', planId });
       }
       const email = data?.email || data?.user?.email || null;
       const telegramId = Number(data?.metadata?.telegram_id || data?.telegram_id) || null;

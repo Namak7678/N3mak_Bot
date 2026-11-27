@@ -98,6 +98,9 @@ test('runs assigned workers and independent reviewer, without executing proposed
   assert.equal(result.agentDrafts.length, 1);
   assert.match(result.summary, /evidence-linked claim/);
   assert.equal(result.agentResults[0].blockedActions[0].reason, 'tool_not_allowed_by_task');
+  assert.equal(result.agentResults[1].role, 'reviewer');
+  assert.equal(result.agentResults[1].proposedActionDecisions[0].reason, 'tool_not_allowed_by_task');
+  assert.equal(store.events.some((event) => event.type === 'reviewer.completed'), true);
   assert.deepEqual(result.agentResults[0].proposedActionDecisions, [{
     tool: 'content:publish',
     policyAllowed: false,

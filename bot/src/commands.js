@@ -643,7 +643,22 @@ function registerCommands(bot) {
       const events = await agentTaskStore.getTaskEvents(taskId, { limit: 12 });
       const created = task.created_at ? new Date(task.created_at).toISOString() : 'غير متاح';
       const updated = task.updated_at ? new Date(task.updated_at).toISOString() : 'غير متاح';
-      const summary = task.result?.review?.summary || task.result?.agentResults?.map((item) => item.result?.summary).filter(Boolean).join(' | ') || task.result?.summary || task.result?.code || task.error?.code || 'لا توجد نتيجة محفوظة';
+      const summary = task.result?.summary || task.result?.review?.summary ||
+        task.result?.code || task.error?.code || 'لا توجد نتيجة محفوظة';
+      const claims = Array.isArray(task.result?.verifiedClaims) ? task.result.verifiedClaims : [];
+      const claimLines = claims.slice(0, 6).map((claim, index) =>
+        (index + 1) + '. ' + String(claim.text).slice(0, 240) +
+        '\n   الأدلة: ' + (Array.isArray(claim.evidenceIds) ? claim.evidenceIds.join(', ') : 'غير محدد')
+      );
+      const sources = Array.isArray(task.result?.evidenceReferences) ? task.result.evidenceReferences : [];
+      const sourceLines = sources.slice(0, 6).map((source) =>
+        '- ' + source.title + ' [' + source.evidenceId + ']' +
+        (source.sourceUrl ? '\n  ' + source.sourceUrl : '') +
+        '\n  SHA-256: ' + String(source.contentSha256 || '').slice(0, 16) + '…'
+      );
+      const blockedCount = Array.isArray(task.result?.agentResults)
+        ? task.result.agentResults.reduce((total, agent) => total + (agent.blockedActions || []).length, 0)
+        : 0;
       const history = events.reverse().map((event) => {
         const at = event.created_at ? new Date(event.created_at).toISOString().slice(0, 16) : '';
         const payload = event.payload && typeof event.payload === 'object'
@@ -658,7 +673,10 @@ function registerCommands(bot) {
         'الحالة: ' + task.status,
         'الإنشاء: ' + created,
         'آخر تحديث: ' + updated,
-        'النتيجة: ' + String(summary).slice(0, 900),
+        'النتيجة: ' + String(summary).slice(0, 700),
+        claims.length ? '\nالادعاءات المعتمدة بالأدلة:\n' + claimLines.join('\n') : '\nلا توجد ادعاءات موثقة محفوظة.',
+        sourceLines.length ? '\nالمصادر:\n' + sourceLines.join('\n') : '',
+        blockedCount ? '\nالطلبات المحجوبة: ' + blockedCount : '',
         '',
         'سجل الأحداث:',
         history,

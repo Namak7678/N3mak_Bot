@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { canonicalizeSourceUrl, normalizeSearchCandidates } = require('./research-source-intake');
+const { canonicalizeSourceUrl, normalizeSearchCandidates, persistResearchCandidates } = require('./research-source-intake');
 
 test('canonicalizes HTTPS URLs and removes tracking fragments', () => {
   assert.equal(
@@ -37,4 +37,29 @@ test('bounds title and excerpt and computes stable passage digest', () => {
   assert.equal(result.candidates[0].title.length, 300);
   assert.equal(result.candidates[0].excerpt.length, 5000);
   assert.match(result.candidates[0].excerptSha256, /^[a-f0-9]{64}$/);
+});
+
+test('persists only normalized unverified candidates through explicit store handoff', async () => {
+  const calls = [];
+  const store = { saveEvidence: async (record) => {
+    calls.push(record);
+    return { evidence_id: record.evidenceId };
+  } };
+  const intake = normalizeSearchCandidates([
+    { url: 'https://source.example/report', title: 'Report', excerpt: 'Captured passage' },
+  ]);
+  const result = await persistResearchCandidates({
+    candidates: intake.candidates,
+    store,
+    taskId: 'research-task-1',
+  });
+  assert.equal(result.storedCount, 1);
+  assert.equal(calls[0].sourceType, 'web');
+  assert.equal(calls[0].metadata.intakeStatus, 'unverified_search_result_excerpt');
+  assert.match(calls[0].evidenceId, /^[0-9a-f-]{36}$/i);
+  await assert.rejects(() => persistResearchCandidates({
+    candidates: [{ ...intake.candidates[0], status: 'verified' }],
+    store,
+    taskId: 'research-task-1',
+  }), /only_unverified_normalized_candidates_can_be_saved/);
 });

@@ -4,6 +4,7 @@ const { validateTaskEnvelope, validateAgentResult, validateEvidenceReferences, v
 const { getRoleCapabilities } = require('./registry');
 const { evaluateToolRequest } = require('./policy-gate');
 const { verifyEvidenceRecord, assessEvidenceDiversity } = require('./evidence-contract');
+const { assessQuestionCoverage } = require('./research-coverage');
 
 const TERMINAL = new Set(['completed', 'needs_evidence', 'refused', 'failed']);
 
@@ -223,6 +224,19 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       ? finalReview.claims
       : results.flatMap(({ result: agentResult }) => agentResult.claims);
     const verifiedEvidenceIds = [...new Set(verifiedClaims.flatMap((claim) => claim.evidenceIds))];
+    let researchCoverage = null;
+    if (task.researchBrief) {
+      try {
+        researchCoverage = assessQuestionCoverage(task.researchBrief.questions, verifiedClaims);
+      } catch {
+        return fail('needs_evidence', 'INVALID_RESEARCH_QUESTION_REFERENCE');
+      }
+      if (!researchCoverage.complete) {
+        return fail('needs_evidence', 'REQUIRED_RESEARCH_QUESTIONS_UNANSWERED', {
+          researchCoverage,
+        });
+      }
+    }
     const evidenceReferences = evidenceBundle
       .filter((item) => verifiedEvidenceIds.includes(item.evidenceId))
       .map(({ evidenceId, sourceType, sourceUrl, title, contentSha256, capturedAt }) => ({
@@ -236,6 +250,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       verifiedClaims,
       evidenceReferences,
       sourceAssessment,
+      researchCoverage,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),
       agentResults: [
         ...results.map(({ role, blockedActions, proposedActionDecisions }) => ({ role, blockedActions, proposedActionDecisions })),

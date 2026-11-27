@@ -546,11 +546,17 @@ function registerCommands(bot) {
         const draftLines = (result.agentDrafts || []).map((draft) =>
           `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
         );
+        const blockedLines = (result.agentResults || []).flatMap((agent) =>
+          (agent.blockedActions || []).map((action) =>
+            `• ${agent.role}: ${action.tool} — محجوب (${action.reason})`
+          )
+        );
         text = [
           result.summary || 'اكتملت المهمة.',
           claims.length ? '\nالنتائج المدعومة بالأدلة:\n' + claimLines.join('\n\n')
             : '\nلم ينتج الفريق ادعاءات موثقة بالأدلة؛ لا تُعرض المسودات كحقائق.',
           sourceLines.length ? '\n\nسجل المصادر المرتبطة:\n' + sourceLines.join('\n\n') : '',
+          blockedLines.length ? '\n\nطلبات إجراءات محجوبة وفق السياسة:\n' + blockedLines.join('\n') : '',
           draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
         ].join('');
       } else {

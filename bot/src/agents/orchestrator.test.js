@@ -95,7 +95,7 @@ test('runs assigned workers and independent reviewer, without executing proposed
   assert.deepEqual(result.evidenceReferences.map((source) => source.evidenceId), ['evidence-1']);
   assert.equal(result.evidenceReferences[0].sourceUrl, 'https://example.com/source');
   assert.equal(result.evidenceReferences[0].contentSha256.length, 64);
-  assert.deepEqual(result.sourceAssessment.warnings, ['single_web_domain']);
+  assert.deepEqual(result.sourceAssessment.warnings, ['single_source_type']);
   assert.equal(result.sourceAssessment.uniqueWebHostCount, 1);
   assert.equal(result.agentDrafts.length, 1);
   assert.match(result.summary, /evidence-linked claim/);

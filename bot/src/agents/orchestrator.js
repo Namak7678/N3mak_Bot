@@ -7,6 +7,7 @@ const { verifyEvidenceRecord, assessEvidenceDiversity } = require('./evidence-co
 const { assessQuestionCoverage } = require('./research-coverage');
 const { assessContradictionCandidates } = require('./contradiction-review');
 const { assessEvidenceSupport } = require('./evidence-support-review');
+const { buildResearchGapPlan } = require('./research-gap-planner');
 
 const TERMINAL = new Set(['completed', 'needs_evidence', 'refused', 'failed']);
 
@@ -245,11 +246,21 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       } catch {
         return fail('needs_evidence', 'INVALID_RESEARCH_QUESTION_REFERENCE');
       }
+      const researchGapPlan = buildResearchGapPlan({
+        questions: task.researchBrief.questions,
+        coverage: researchCoverage,
+        evidenceSupportReview,
+        contradictionReview,
+        evidenceBundle,
+        maxQueries: 8,
+      });
       if (!researchCoverage.complete) {
         return fail('needs_evidence', 'REQUIRED_RESEARCH_QUESTIONS_UNANSWERED', {
           researchCoverage,
+          researchGapPlan,
         });
       }
+      // Query planning is deterministic; it does not fetch the web or consume a provider quota.
     }
     const evidenceReferences = evidenceBundle
       .filter((item) => verifiedEvidenceIds.includes(item.evidenceId))
@@ -265,6 +276,9 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       evidenceReferences,
       sourceAssessment,
       researchCoverage,
+      researchGapPlan: task.researchBrief ? researchGapPlan : buildResearchGapPlan({
+        questions: [], coverage: null, evidenceSupportReview, contradictionReview, evidenceBundle, maxQueries: 8,
+      }),
       contradictionReview,
       evidenceSupportReview,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),

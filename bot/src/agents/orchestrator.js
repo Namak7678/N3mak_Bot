@@ -240,16 +240,25 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       payload: { reviewCount: evidenceSupportReview.reviewCount, truncated: evidenceSupportReview.truncated, semanticVerdictsProduced: 0 },
     });
     let researchCoverage = null;
+    let researchGapPlan = null;
     if (task.researchBrief) {
       try {
         researchCoverage = assessQuestionCoverage(task.researchBrief.questions, verifiedClaims);
       } catch {
         return fail('needs_evidence', 'INVALID_RESEARCH_QUESTION_REFERENCE');
       }
-      const researchGapPlan = buildResearchGapPlan({
+      researchGapPlan = buildResearchGapPlan({
         questions: task.researchBrief.questions,
         coverage: researchCoverage,
-        evidenceSupportReview,
+        evidenceSupportReview: {
+          ...evidenceSupportReview,
+          reviews: evidenceSupportReview.reviews.map((review) => ({
+            ...review,
+            claimId: `claim-${review.claimIndex + 1}`,
+            claimText: verifiedClaims[review.claimIndex]?.text || '',
+            questionIds: verifiedClaims[review.claimIndex]?.questionIds || [],
+          })),
+        },
         contradictionReview,
         evidenceBundle,
         maxQueries: 8,
@@ -276,9 +285,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       evidenceReferences,
       sourceAssessment,
       researchCoverage,
-      researchGapPlan: task.researchBrief ? researchGapPlan : buildResearchGapPlan({
-        questions: [], coverage: null, evidenceSupportReview, contradictionReview, evidenceBundle, maxQueries: 8,
-      }),
+      researchGapPlan,
       contradictionReview,
       evidenceSupportReview,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),

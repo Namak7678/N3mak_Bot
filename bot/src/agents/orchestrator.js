@@ -3,7 +3,7 @@
 const { validateTaskEnvelope, validateAgentResult, validateEvidenceReferences, validateClaimSupport } = require('./task-contract');
 const { getRoleCapabilities } = require('./registry');
 const { evaluateToolRequest } = require('./policy-gate');
-const { verifyEvidenceRecord } = require('./evidence-contract');
+const { verifyEvidenceRecord, assessEvidenceDiversity } = require('./evidence-contract');
 
 const TERMINAL = new Set(['completed', 'needs_evidence', 'refused', 'failed']);
 
@@ -228,12 +228,14 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       .map(({ evidenceId, sourceType, sourceUrl, title, contentSha256, capturedAt }) => ({
         evidenceId, sourceType, sourceUrl, title, contentSha256, capturedAt,
       }));
+    const sourceAssessment = assessEvidenceDiversity(evidenceBundle);
     const result = {
       status: 'completed',
       taskId,
       summary: `Completed with ${verifiedClaims.length} evidence-linked claim(s); model-generated summaries remain unverified drafts.`,
       verifiedClaims,
       evidenceReferences,
+      sourceAssessment,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),
       agentResults: [
         ...results.map(({ role, blockedActions, proposedActionDecisions }) => ({ role, blockedActions, proposedActionDecisions })),

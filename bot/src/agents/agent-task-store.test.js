@@ -178,3 +178,21 @@ test('aggregates durable task counts by lifecycle status', async () => {
   assert.deepEqual(counts, [{ status: 'completed', count: 8 }, { status: 'running', count: 2 }]);
   assert.match(calls[0].sql, /GROUP BY status/);
 });
+
+test('shares successful schema initialization across concurrent command handlers', async () => {
+  const { db, calls } = fakeDatabase();
+  let resolveQuery;
+  db.query = () => {
+    calls.push({ sql: 'SCHEMA_INIT', params: [] });
+    return new Promise((resolve) => { resolveQuery = resolve; });
+  };
+  const store = createAgentTaskStore({ db });
+
+  const first = store.ensureSchema();
+  const second = store.ensureSchema();
+  assert.equal(calls.length, 1);
+  resolveQuery({ rowCount: 0, rows: [] });
+  await Promise.all([first, second]);
+  await store.ensureSchema();
+  assert.equal(calls.length, 1);
+});

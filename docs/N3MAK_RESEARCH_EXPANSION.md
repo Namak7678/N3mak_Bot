@@ -105,3 +105,12 @@ Offline unit tests were added for question mapping, unknown question IDs, eviden
 ### Agent contract integration
 
 The LLM adapter now receives the research brief and an output schema that asks each claim to identify exact question IDs. Its instructions prohibit invented IDs and direct the agent to request more evidence when required questions remain unanswered. The orchestrator remains authoritative: model-reported coverage is not trusted; it recomputes coverage from reviewer-approved claims and stored evidence references. Adapter regression tests verify the brief and mapping contract are sent to the model.
+
+
+## Contradiction review candidate engine — implementation status
+
+The Workforce Control Core now creates a bounded review queue from reviewer-approved claims that share one or more research question IDs. Each candidate carries both claim IDs, the shared question IDs, the union of evidence IDs, and an explicit `undetermined` relation with `requires_review` status.
+
+This is candidate generation only. It does not infer a contradiction from wording, shared citations, polarity terms, or model output. It produces no semantic verdict and no confidence score. Candidate generation is capped at 100 pairs per task; truncation is explicit. The orchestrator includes the review queue in the durable result and writes an audit event with the candidate count. Completion is not blocked solely because candidates exist; unresolved candidates must be reviewed before a human relies on the findings.
+
+Offline tests cover shared-question candidate generation, no false inference from shared evidence alone, input bounds, and pair truncation. Semantic contradiction classification and targeted follow-up research remain future, separately evaluated stages.

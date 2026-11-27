@@ -123,3 +123,14 @@ The orchestrator now performs a bounded lexical overlap pass between each review
 This does not establish semantic entailment or truth. Token overlap can miss paraphrases, negation, dates, units, scope and context; matching words can also occur in irrelevant passages. The result explicitly reports zero semantic verdicts and is not a completion gate. The audit summary is appended to the task audit log and returned in the durable task result alongside contradiction candidates.
 
 Offline tests cover positive lexical overlap, weak overlap, missing evidence, pair bounds and result integration. The orchestrator regression test asserts both review structures are returned. Runtime execution and CI on the latest branch head remain pending.
+
+
+## Bounded research gap planner — implementation status (2026-11-27)
+
+The orchestrator now builds a deterministic gap plan after evidence coverage and the existing lexical support/contradiction candidate reviews. It identifies required unanswered questions, weak-overlap or missing-evidence claim links, and question-linked contradiction candidates; deduplicates gap records; prepares at most eight query drafts; and lists hosts already represented in the evidence bundle as exclusions.
+
+The planner is deliberately planning-only: it does not call a search engine, download pages, save evidence, consume a model call, or claim to have verified a source. Query plans are returned in the durable result; when required questions remain unanswered, the task stays needs_evidence and returns the plan alongside the gap IDs. Telegram /agents --research <objective> creates a single required research question for coverage tracking; the failure response shows unanswered IDs and suggested queries, explicitly marked as not executed.
+
+Automated web retrieval is not yet wired to this loop. It must be added only through a configured, policy-approved search adapter that returns source metadata and captured passages into the existing immutable evidence store, with duplicate-host/URL checks and the task's shared deadline/budget enforced. Until that adapter exists, this stage is query generation, not autonomous deep research.
+
+Offline tests cover query generation, exclusion of previously seen hosts, the hard eight-query limit, and the explicit no-network contract. CI must verify the final branch head.

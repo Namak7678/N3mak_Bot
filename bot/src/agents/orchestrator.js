@@ -137,16 +137,24 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
           return fail(result.status, `AGENT_${result.status.toUpperCase()}`, { role, summary: result.summary });
         }
 
-        const blockedActions = [];
-        for (const action of result.proposedActions) {
+        const proposedActionDecisions = result.proposedActions.map((action) => {
           const decision = evaluateToolRequest({ role, tool: action.tool, task });
-          if (!decision.allowed) blockedActions.push({ tool: action.tool, reason: decision.reason });
-        }
-        results.push({ role, result, blockedActions });
+          return {
+            tool: action.tool,
+            policyAllowed: decision.allowed,
+            reason: decision.allowed ? 'execution_disabled_in_workforce_pilot' : decision.reason,
+          };
+        });
+        const blockedActions = proposedActionDecisions.filter((action) => !action.policyAllowed);
+        results.push({ role, result, blockedActions, proposedActionDecisions });
         await store.appendEvent(taskId, {
           type: 'agent.completed',
           actor: role,
-          payload: { claims: result.claims.length, proposedActions: result.proposedActions.length, blockedActions },
+          payload: {
+            claims: result.claims.length,
+            proposedActions: proposedActionDecisions,
+            blockedActions,
+          },
         });
       } catch (error) {
         return fail('failed', error.code || 'AGENT_EXECUTION_FAILED', { role });
@@ -208,7 +216,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       verifiedClaims,
       evidenceReferences,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),
-      agentResults: results.map(({ role, blockedActions }) => ({ role, blockedActions })),
+      agentResults: results.map(({ role, blockedActions, proposedActionDecisions }) => ({ role, blockedActions, proposedActionDecisions })),
       review: finalReview,
       modelCalls: calls,
       sideEffectsExecuted: 0,

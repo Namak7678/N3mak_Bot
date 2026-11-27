@@ -579,7 +579,14 @@ function registerCommands(bot) {
           draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
         ].join('');
       } else {
-        text = `حالة المهمة: ${result.status}\nالسبب: ${result.code || result.error || 'غير محدد'}`;
+        const gapPlan = result.researchGapPlan;
+        const gapLines = Array.isArray(gapPlan?.queries)
+          ? gapPlan.queries.map((item) => '• ' + item.query).join('\\n')
+          : '';
+        const unanswered = result.researchCoverage?.unansweredRequired || [];
+        text = 'حالة المهمة: ' + result.status + '\\nالسبب: ' + (result.code || result.error || 'غير محدد') +
+          (unanswered.length ? '\\nالأسئلة غير المجابة: ' + unanswered.join(', ') : '') +
+          (gapLines ? '\\nاستعلامات متابعة مقترحة (لم تُنفذ):\\n' + gapLines : '');
       }
       await ctx.reply(`N3MAK Workforce — ${result.status}\n\n${text.slice(0, 3500)}\n\nلم يتم تنفيذ أي إجراء خارجي.`);
     } catch (error) {

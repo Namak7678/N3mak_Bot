@@ -41,6 +41,33 @@ test('requires a URL for web evidence and bounds stored content', () => {
 });
 
 
+test('flags duplicate canonical URLs and narrow source diversity without rejecting evidence', () => {
+  const { assessEvidenceDiversity } = require('./evidence-contract');
+  const assessment = assessEvidenceDiversity([
+    { evidenceId: 'e1', sourceType: 'web', sourceUrl: 'https://example.com/a?utm_source=x' },
+    { evidenceId: 'e2', sourceType: 'web', sourceUrl: 'https://example.com/a#section' },
+    { evidenceId: 'e3', sourceType: 'document', sourceUrl: null },
+  ]);
+  assert.equal(assessment.evidenceCount, 3);
+  assert.equal(assessment.uniqueWebHostCount, 1);
+  assert.deepEqual(assessment.duplicateSources, [{
+    sourceUrl: 'https://example.com/a',
+    evidenceIds: ['e1', 'e2'],
+  }]);
+  assert.deepEqual(assessment.warnings, ['duplicate_source_urls', 'single_web_domain']);
+});
+
+test('reports missing evidence as a source gap', () => {
+  const { assessEvidenceDiversity } = require('./evidence-contract');
+  assert.deepEqual(assessEvidenceDiversity([]), {
+    evidenceCount: 0,
+    uniqueWebHostCount: 0,
+    sourceTypeCounts: {},
+    duplicateSources: [],
+    warnings: ['no_evidence'],
+  });
+});
+
 test('verifies evidence digest and detects content tampering', () => {
   const record = createEvidenceRecord({
     evidenceId: 'evidence-verify',

@@ -7,7 +7,7 @@ const { canonicalizeSourceUrl, normalizeSearchCandidates, persistResearchCandida
 test('canonicalizes HTTPS URLs and removes tracking fragments', () => {
   assert.equal(
     canonicalizeSourceUrl('https://www.Example.org/page/?utm_source=x#frag'),
-    'https://example.org/page?'
+    'https://example.org/page'
   );
 });
 

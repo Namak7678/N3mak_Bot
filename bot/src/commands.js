@@ -646,11 +646,23 @@ function registerCommands(bot) {
       const summary = task.result?.review?.summary || task.result?.agentResults?.map((item) => item.result?.summary).filter(Boolean).join(' | ') || task.result?.summary || task.result?.code || task.error?.code || 'لا توجد نتيجة محفوظة';
       const history = events.reverse().map((event) => {
         const at = event.created_at ? new Date(event.created_at).toISOString().slice(0, 16) : '';
-        return `- ${at} | ${event.event_type} | ${event.actor}`;
-      }).join('\\n') || 'لا توجد أحداث مسجلة';
-      await ctx.reply(
-        `المهمة: ${task.task_id}\\nالحالة: ${task.status}\\nالإنشاء: ${created}\\nآخر تحديث: ${updated}\\nالنتيجة: ${String(summary).slice(0, 900)}\\n\\nسجل الأحداث:\\n${history}`
-      );
+        const payload = event.payload && typeof event.payload === 'object'
+          ? Object.entries(event.payload).slice(0, 5)
+            .map(([key, value]) => key + '=' + String(value).slice(0, 90))
+            .join(', ')
+          : '';
+        return '- ' + at + ' | ' + event.event_type + ' | ' + event.actor + (payload ? ' | ' + payload : '');
+      }).join('\n') || 'لا توجد أحداث مسجلة';
+      await ctx.reply([
+        'المهمة: ' + task.task_id,
+        'الحالة: ' + task.status,
+        'الإنشاء: ' + created,
+        'آخر تحديث: ' + updated,
+        'النتيجة: ' + String(summary).slice(0, 900),
+        '',
+        'سجل الأحداث:',
+        history,
+      ].join('\n'));
     } catch (error) {
       console.error('[agents_task] failed:', error.message);
       await ctx.reply('تعذّر تحميل تفاصيل المهمة حالياً.');

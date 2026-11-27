@@ -97,7 +97,7 @@ function normalizeSearchCandidates(results, {
 }
 
 
-async function persistResearchCandidates({ candidates, store, taskId, now = () => new Date() } = {}) {
+async function persistResearchCandidates({ candidates, store, taskId } = {}) {
   if (!Array.isArray(candidates) || candidates.length > MAX_RESULTS) {
     throw new TypeError('invalid_research_candidates');
   }
@@ -129,7 +129,7 @@ async function persistResearchCandidates({ candidates, store, taskId, now = () =
         intakeStatus: 'unverified_search_result_excerpt',
         sourceHost: new URL(sourceUrl).hostname,
         providerCapturedAt: candidate.capturedAt || null,
-        excerptSha256: createHash('sha256').update(candidate.excerpt.trim(), 'utf8').digest('hex(),
+        excerptSha256: createHash('sha256').update(candidate.excerpt.trim(), 'utf8').digest('hex'),
       },
     });
     stored.push({ evidenceId: record.evidence_id || record.evidenceId, sourceUrl, status: 'stored_unverified' });

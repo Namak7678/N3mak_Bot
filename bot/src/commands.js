@@ -496,7 +496,7 @@ function registerCommands(bot) {
       return;
     }
     if (!objective) {
-      await ctx.reply('الاستخدام: /agents [--evidence id1,id2] المهمة المطلوب إعدادها ومراجعتها');
+      await ctx.reply('الاستخدام: /agents [--evidence id1,id2 | --research] المهمة المطلوب إعدادها ومراجعتها');
       return;
     }
     if (objective.length > 4000) {
@@ -523,6 +523,7 @@ function registerCommands(bot) {
         allowedTools: ['report:draft', 'audit:read'],
         budget: { maxTokens: 2400, timeoutMs: 45000, maxModelCalls: 2 },
         evidenceIds,
+        ...(researchObjective ? { researchBrief: { questions: [{ id: 'main', question: researchObjective.slice(0, 500), required: true }] } } : {}),
         createdAt: now.toISOString(),
         expiresAt: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
       };

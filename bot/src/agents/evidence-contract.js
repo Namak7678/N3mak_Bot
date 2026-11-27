@@ -74,4 +74,46 @@ function createEvidenceRecord(input, now = new Date()) {
   });
 }
 
-module.exports = { SOURCE_TYPES, CLASSIFICATIONS, canonicalizeSourceUrl, createEvidenceRecord, verifyEvidenceRecord };
+function assessEvidenceDiversity(records) {
+  if (!Array.isArray(records)) throw new TypeError('invalid_evidence_records');
+  const sourceTypeCounts = {};
+  const hosts = new Set();
+  const seenUrls = new Map();
+  let webSourceCount = 0;
+  for (const record of records) {
+    if (!record || typeof record.evidenceId !== 'string' || !SOURCE_TYPES.includes(record.sourceType)) {
+      throw new TypeError('invalid_evidence_record');
+    }
+    sourceTypeCounts[record.sourceType] = (sourceTypeCounts[record.sourceType] || 0) + 1;
+    if (record.sourceType !== 'web' || !record.sourceUrl) continue;
+    webSourceCount += 1;
+    let canonicalUrl;
+    try {
+      canonicalUrl = canonicalizeSourceUrl(record.sourceUrl);
+    } catch {
+      continue;
+    }
+    const host = new URL(canonicalUrl).hostname.toLowerCase();
+    hosts.add(host);
+    const ids = seenUrls.get(canonicalUrl) || [];
+    ids.push(record.evidenceId);
+    seenUrls.set(canonicalUrl, ids);
+  }
+  const duplicateSources = [...seenUrls.entries()]
+    .filter(([, evidenceIds]) => evidenceIds.length > 1)
+    .map(([sourceUrl, evidenceIds]) => ({ sourceUrl, evidenceIds }));
+  const warnings = [];
+  if (!records.length) warnings.push('no_evidence');
+  if (duplicateSources.length) warnings.push('duplicate_source_urls');
+  if (webSourceCount > 1 && hosts.size === 1) warnings.push('single_web_domain');
+  if (records.length > 0 && Object.keys(sourceTypeCounts).length === 1) warnings.push('single_source_type');
+  return {
+    evidenceCount: records.length,
+    uniqueWebHostCount: hosts.size,
+    sourceTypeCounts,
+    duplicateSources,
+    warnings,
+  };
+}
+
+module.exports = { SOURCE_TYPES, CLASSIFICATIONS, canonicalizeSourceUrl, createEvidenceRecord, verifyEvidenceRecord, assessEvidenceDiversity };

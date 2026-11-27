@@ -1,10 +1,5 @@
 'use strict';
 
-const STOP_WORDS = new Set([
-  'a','an','and','are','as','at','be','by','for','from','in','is','it','of','on','or','that','the','to','was','were','with',
-  'في','من','على','الى','إلى','عن','أن','إن','هو','هي','و','او','أو','هذا','هذه','تم','قد'
-]);
-
 function tokens(value) {
   return String(value || '').toLowerCase()
     .normalize('NFKC')

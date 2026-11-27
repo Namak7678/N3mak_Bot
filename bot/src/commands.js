@@ -546,9 +546,9 @@ function registerCommands(bot) {
         const draftLines = (result.agentDrafts || []).map((draft) =>
           `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
         );
-        const blockedLines = (result.agentResults || []).flatMap((agent) =>
-          (agent.blockedActions || []).map((action) =>
-            `• ${agent.role}: ${action.tool} — محجوب (${action.reason})`
+        const actionLines = (result.agentResults || []).flatMap((agent) =>
+          (agent.proposedActionDecisions || []).map((action) =>
+            `• ${agent.role}: ${action.tool} — ${action.policyAllowed ? 'مسموح وفق السياسة، لكن التنفيذ معطل' : 'محجوب (' + action.reason + ')'}`
           )
         );
         text = [
@@ -556,7 +556,7 @@ function registerCommands(bot) {
           claims.length ? '\nالنتائج المدعومة بالأدلة:\n' + claimLines.join('\n\n')
             : '\nلم ينتج الفريق ادعاءات موثقة بالأدلة؛ لا تُعرض المسودات كحقائق.',
           sourceLines.length ? '\n\nسجل المصادر المرتبطة:\n' + sourceLines.join('\n\n') : '',
-          blockedLines.length ? '\n\nطلبات إجراءات محجوبة وفق السياسة:\n' + blockedLines.join('\n') : '',
+          actionLines.length ? '\n\nمقترحات الأدوات (لم يُنفذ أي منها):\n' + actionLines.join('\n') : '',
           draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
         ].join('');
       } else {

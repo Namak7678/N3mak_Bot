@@ -97,6 +97,9 @@ test('runs assigned workers and independent reviewer, without executing proposed
   assert.equal(result.evidenceReferences[0].contentSha256.length, 64);
   assert.deepEqual(result.sourceAssessment.warnings, ['single_source_type']);
   assert.equal(result.sourceAssessment.uniqueWebHostCount, 1);
+  assert.equal(result.contradictionReview.verdictsProduced, 0);
+  assert.equal(result.evidenceSupportReview.semanticVerdictsProduced, 0);
+  assert.equal(result.evidenceSupportReview.reviewCount, 1);
   assert.equal(result.agentDrafts.length, 1);
   assert.match(result.summary, /evidence-linked claim/);
   assert.equal(result.agentResults[0].blockedActions[0].reason, 'tool_not_allowed_by_task');

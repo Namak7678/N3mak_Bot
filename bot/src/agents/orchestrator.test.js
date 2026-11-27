@@ -98,6 +98,13 @@ test('runs assigned workers and independent reviewer, without executing proposed
   assert.equal(result.agentDrafts.length, 1);
   assert.match(result.summary, /evidence-linked claim/);
   assert.equal(result.agentResults[0].blockedActions[0].reason, 'tool_not_allowed_by_task');
+  assert.deepEqual(result.agentResults[0].proposedActionDecisions, [{
+    tool: 'content:publish',
+    policyAllowed: false,
+    reason: 'tool_not_allowed_by_task',
+  }]);
+  assert.equal(store.events.some((event) => event.type === 'agent.completed' &&
+    event.payload.proposedActions?.[0]?.reason === 'tool_not_allowed_by_task'), true);
   assert.equal(store.rows.get('orchestrator-task-1').status, 'completed');
 });
 

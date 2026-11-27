@@ -8,8 +8,11 @@ function createAgentTaskStore({ db = pool } = {}) {
     throw new TypeError('invalid_agent_task_database');
   }
 
+  let schemaPromise;
+
   async function ensureSchema() {
-    await db.query(`
+    if (!schemaPromise) {
+      schemaPromise = db.query(`
       CREATE TABLE IF NOT EXISTS n3mak_agent_tasks (
         task_id TEXT PRIMARY KEY,
         idempotency_key TEXT NOT NULL UNIQUE,
@@ -71,7 +74,12 @@ function createAgentTaskStore({ db = pool } = {}) {
       CREATE TRIGGER n3mak_agent_events_no_update
         BEFORE UPDATE OR DELETE ON n3mak_agent_task_events
         FOR EACH ROW EXECUTE FUNCTION n3mak_reject_agent_event_mutation();
-    `);
+    `).catch((error) => {
+      schemaPromise = null;
+      throw error;
+    });
+    }
+    return schemaPromise;
   }
 
   async function appendEventWith(client, taskId, event) {

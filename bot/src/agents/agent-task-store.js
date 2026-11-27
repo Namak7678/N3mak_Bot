@@ -260,7 +260,17 @@ function createAgentTaskStore({ db = pool } = {}) {
     return result.rows;
   }
 
-  return { ensureSchema, createTask, getTask, getTaskEvents, transitionTask, appendEvent, expireOverdueTasks, listRecentTasks, saveEvidence, getEvidence, listRecentEvidence };
+  async function getTaskStatusCounts() {
+    const result = await db.query(
+      `SELECT status, COUNT(*)::int AS count
+       FROM n3mak_agent_tasks
+       GROUP BY status
+       ORDER BY status`,
+    );
+    return result.rows;
+  }
+
+  return { ensureSchema, createTask, getTask, getTaskEvents, transitionTask, appendEvent, expireOverdueTasks, listRecentTasks, getTaskStatusCounts, saveEvidence, getEvidence, listRecentEvidence };
 }
 
 const defaultStore = createAgentTaskStore();

@@ -162,6 +162,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
     }
 
     let finalReview = null;
+    let reviewActionDecisions = [];
     if (reviewerAssigned) {
       if (calls >= task.budget.maxModelCalls) return fail('failed', 'MODEL_CALL_BUDGET_EXHAUSTED');
       const remainingMs = Math.max(1, Math.min(task.budget.timeoutMs, Date.parse(task.expiresAt) - clock().getTime()));
@@ -193,6 +194,19 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
         if (finalReview.status !== 'completed') {
           return fail(finalReview.status, `REVIEW_${finalReview.status.toUpperCase()}`, { summary: finalReview.summary });
         }
+        reviewActionDecisions = finalReview.proposedActions.map((action) => {
+          const decision = evaluateToolRequest({ role: 'reviewer', tool: action.tool, task });
+          return {
+            tool: action.tool,
+            policyAllowed: decision.allowed,
+            reason: decision.allowed ? 'execution_disabled_in_workforce_pilot' : decision.reason,
+          };
+        });
+        await store.appendEvent(taskId, {
+          type: 'reviewer.completed',
+          actor: 'reviewer',
+          payload: { claims: finalReview.claims.length, proposedActions: reviewActionDecisions },
+        });
       } catch (error) {
         return fail('failed', error.code || 'REVIEW_FAILED', { role: 'reviewer' });
       }
@@ -216,7 +230,14 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       verifiedClaims,
       evidenceReferences,
       agentDrafts: results.map(({ role, result: agentResult }) => ({ role, summary: agentResult.summary })),
-      agentResults: results.map(({ role, blockedActions, proposedActionDecisions }) => ({ role, blockedActions, proposedActionDecisions })),
+      agentResults: [
+        ...results.map(({ role, blockedActions, proposedActionDecisions }) => ({ role, blockedActions, proposedActionDecisions })),
+        ...(finalReview ? [{
+          role: 'reviewer',
+          blockedActions: reviewActionDecisions.filter((action) => !action.policyAllowed),
+          proposedActionDecisions: reviewActionDecisions,
+        }] : []),
+      ],
       review: finalReview,
       modelCalls: calls,
       sideEffectsExecuted: 0,

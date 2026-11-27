@@ -37,7 +37,7 @@ test('passes bounded provenance evidence to the model as untrusted source data',
     },
   });
   await adapter({
-    task: { objective: 'Summarize source', taskType: 'research' },
+    task: { objective: 'Summarize source', taskType: 'research', researchBrief: { questions: [{ id: 'market', question: 'Is there demand?', required: true }] } },
     role: 'researcher',
     evidenceIds: ['evidence-1'],
     evidence: [{
@@ -49,6 +49,9 @@ test('passes bounded provenance evidence to the model as untrusted source data',
   });
   const payload = JSON.parse(request.messages[1].content);
   assert.equal(payload.evidence[0].evidenceId, 'evidence-1');
+  assert.deepEqual(payload.researchBrief.questions.map((question) => question.id), ['market']);
+  assert.deepEqual(payload.outputContract.claims[0].questionIds, ['only IDs from researchBrief.questions']);
+  assert.match(payload.constraints.join(' '), /exact question IDs/);
   assert.equal(payload.evidence[0].content.length, 5000);
   assert.match(payload.constraints.join(' '), /untrusted source/);
   assert.equal(request.options.task, 'research');

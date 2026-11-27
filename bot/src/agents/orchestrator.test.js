@@ -276,3 +276,24 @@ test('blocks reviewer factual claims that lack evidence and does not publish an 
   assert.equal(result.code, 'REVIEW_UNSUPPORTED_CLAIMS');
   assert.equal(store.rows.get('orchestrator-task-1').status, 'needs_evidence');
 });
+
+
+test('does not complete a task when its deadline passes during the reviewer call', async () => {
+  const store = fakeStore();
+  let now = Date.now();
+  const task = makeTask({ expiresAt: new Date(now + 5000).toISOString() });
+  const orchestrator = createOrchestrator({
+    store,
+    clock: () => new Date(now),
+    runAgent: async (input) => {
+      if (input.reviewOnly) now = Date.parse(task.expiresAt) + 1;
+      return answer(input.reviewOnly ? 'Review completed too late.' : 'Research completed.');
+    },
+  });
+  await orchestrator.submit(task);
+  const result = await orchestrator.run(task.taskId);
+  assert.equal(result.status, 'failed');
+  assert.equal(result.code, 'TASK_EXPIRED');
+  assert.equal(store.rows.get(task.taskId).status, 'failed');
+  assert.equal(store.rows.get(task.taskId).result.code, 'TASK_EXPIRED');
+});

@@ -42,10 +42,7 @@ function createAgentTaskStore({ db = pool } = {}) {
       CREATE INDEX IF NOT EXISTS n3mak_agent_evidence_source_idx
         ON n3mak_agent_evidence (source_type, captured_at DESC);
       CREATE OR REPLACE FUNCTION n3mak_reject_evidence_mutation()
-      RETURNS trigger LANGUAGE plpgsql AS $
-      BEGIN
-        RAISE EXCEPTION 'n3mak agent evidence is immutable; add a new version';
-      END;
+      RETURNS trigger LANGUAGE plpgsql AS $1
       $;
       DROP TRIGGER IF EXISTS n3mak_agent_evidence_no_update ON n3mak_agent_evidence;
       CREATE TRIGGER n3mak_agent_evidence_no_update

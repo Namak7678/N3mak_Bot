@@ -36,7 +36,7 @@ function buildResearchGapPlan({
     }
   }
   for (const candidate of (contradictionReview.candidates || [])) {
-    const qids = Array.isArray(candidate.questionIds) ? candidate.questionIds : [];
+    const qids = Array.isArray(candidate.sharedQuestionIds) ? candidate.sharedQuestionIds : (Array.isArray(candidate.questionIds) ? candidate.questionIds : []);
     const linked = qids.map((id) => questionById.get(id)).filter(Boolean);
     const prompt = linked.length ? linked.map((q) => safeText(q.question)).join(' ; ') : '';
     if (prompt) gaps.push({ gapType: 'contradiction_candidate', questionIds: qids, prompt, priority: 'review' });

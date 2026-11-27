@@ -550,6 +550,13 @@ function registerCommands(bot) {
         const researchCoverageLine = researchCoverage
           ? `\nتغطية أسئلة البحث: ${researchCoverage.coveredQuestions}/${researchCoverage.totalQuestions} — مكتملة`
           : '';
+        const contradictionReview = result.contradictionReview || {};
+        const contradictionLine = `\nمراجعة التعارضات: ${contradictionReview.candidateCount || 0} أزواج تحتاج مراجعة` + (contradictionReview.truncated ? ' — القائمة مختصرة بسبب الحد' : '');
+        const supportReview = result.evidenceSupportReview || {};
+        const weakSupportCount = Array.isArray(supportReview.reviews)
+          ? supportReview.reviews.filter((item) => item.status !== 'text_overlap_signal').length
+          : 0;
+        const supportLine = `\nفحص ارتباط الادعاءات بالأدلة: ${supportReview.reviewCount || 0} مراجعة، ${weakSupportCount} تحتاج تدقيقاً يدوياً`;
         const draftLines = (result.agentDrafts || []).map((draft) =>
           `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
         );
@@ -565,6 +572,8 @@ function registerCommands(bot) {
           sourceLines.length ? '\n\nسجل المصادر المرتبطة:\n' + sourceLines.join('\n\n') : '',
           sourceAssessmentLine,
           researchCoverageLine,
+          contradictionLine,
+          supportLine,
           actionLines.length ? '\n\nمقترحات الأدوات (لم يُنفذ أي منها):\n' + actionLines.join('\n') : '',
           draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
         ].join('');
@@ -661,6 +670,8 @@ function registerCommands(bot) {
       );
       const sources = Array.isArray(task.result?.evidenceReferences) ? task.result.evidenceReferences : [];
       const sourceAssessment = task.result?.sourceAssessment || {};
+      const contradictionReview = task.result?.contradictionReview || {};
+      const supportReview = task.result?.evidenceSupportReview || {};
       const sourceWarnings = Array.isArray(sourceAssessment.warnings) ? sourceAssessment.warnings : [];
       const sourceLines = sources.slice(0, 6).map((source) =>
         '- ' + source.title + ' [' + source.evidenceId + ']' +
@@ -689,6 +700,12 @@ function registerCommands(bot) {
         sourceLines.length ? '\nالمصادر:\n' + sourceLines.join('\n') : '',
         sourceAssessment.evidenceCount !== undefined
           ? '\nتقييم تنوع المصادر: ' + sourceAssessment.evidenceCount + ' سجل، ' + (sourceAssessment.uniqueWebHostCount || 0) + ' نطاق ويب' + (sourceWarnings.length ? ' — ' + sourceWarnings.join(', ') : '')
+          : '',
+        task.result?.contradictionReview
+          ? '\nأزواج التعارضات قيد المراجعة: ' + (contradictionReview.candidateCount || 0)
+          : '',
+        task.result?.evidenceSupportReview
+          ? '\nتدقيق ارتباط الأدلة: ' + (supportReview.reviewCount || 0) + ' مراجعة؛ لا توجد أحكام دلالية آلية'
           : '',
         blockedCount ? '\nالطلبات المحجوبة: ' + blockedCount : '',
         '',

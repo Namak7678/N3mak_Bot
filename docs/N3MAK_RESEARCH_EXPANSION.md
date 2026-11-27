@@ -145,3 +145,16 @@ The next research block adds `research-source-intake.js`:
 - Provides an explicit `persistResearchCandidates` handoff to the existing immutable evidence store. Stored metadata identifies the material as an unverified search-result excerpt; persistence is not verification.
 
 This module does **not** make a network request or silently write to the database. A configured search provider must supply candidate result objects, and a caller must explicitly invoke the store handoff. Provider integration, live retrieval, page-level extraction, and task-budget orchestration remain the next stage.
+
+
+## Bounded provider adapter — implementation status (2026-11-27)
+
+Added `bot/src/agents/research-search-adapter.js` as a provider-neutral retrieval boundary:
+- Provider is injected by the caller; missing provider returns `provider_unavailable` and performs no network request.
+- Query drafts are normalized/deduplicated and hard-capped at eight.
+- Per-query results and the whole candidate set are capped at eight; canonical URL and host deduplication reuses the existing source-intake rules.
+- A single shared deadline (maximum 60 seconds) is enforced across sequential provider calls. The provider receives an AbortSignal and remaining time; a timeout aborts and stops the loop.
+- Provider errors are recorded without fabricating source records. Result statuses distinguish provider unavailable, timeout, exhausted budget, search failure and normalized results.
+- The adapter only normalizes and returns unverified candidates. It does not save to PostgreSQL; evidence persistence remains an explicit separate call to `persistResearchCandidates`.
+
+Offline tests cover missing provider, duplicate queries, result/host bounds, provider errors and shared timeout. The adapter is intentionally not wired into the task runner yet: runtime provider configuration and shared task-budget accounting must be integrated and tested before any autonomous retrieval is enabled.

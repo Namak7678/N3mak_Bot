@@ -543,6 +543,9 @@ function registerCommands(bot) {
         const sourceLines = (result.evidenceReferences || []).map((source) =>
           `• ${source.title} [${source.evidenceId}]\n  ${source.sourceUrl || 'مصدر داخلي'}\n  SHA-256: ${source.contentSha256}`
         );
+        const sourceAssessment = result.sourceAssessment || {};
+        const sourceWarnings = Array.isArray(sourceAssessment.warnings) ? sourceAssessment.warnings : [];
+        const sourceAssessmentLine = `\nتقييم تنوع المصادر: ${sourceAssessment.evidenceCount ?? 0} سجل، ${sourceAssessment.uniqueWebHostCount ?? 0} نطاق ويب${sourceWarnings.length ? ' — تنبيهات: ' + sourceWarnings.join(', ') : ''}`;
         const draftLines = (result.agentDrafts || []).map((draft) =>
           `[${draft.role} — مسودة غير موثقة تلقائياً]\n${draft.summary}`
         );
@@ -556,6 +559,7 @@ function registerCommands(bot) {
           claims.length ? '\nالنتائج المدعومة بالأدلة:\n' + claimLines.join('\n\n')
             : '\nلم ينتج الفريق ادعاءات موثقة بالأدلة؛ لا تُعرض المسودات كحقائق.',
           sourceLines.length ? '\n\nسجل المصادر المرتبطة:\n' + sourceLines.join('\n\n') : '',
+          sourceAssessmentLine,
           actionLines.length ? '\n\nمقترحات الأدوات (لم يُنفذ أي منها):\n' + actionLines.join('\n') : '',
           draftLines.length ? '\n\nمسودات العمل (للمراجعة فقط):\n' + draftLines.join('\n\n') : '',
         ].join('');
@@ -651,6 +655,8 @@ function registerCommands(bot) {
         '\n   الأدلة: ' + (Array.isArray(claim.evidenceIds) ? claim.evidenceIds.join(', ') : 'غير محدد')
       );
       const sources = Array.isArray(task.result?.evidenceReferences) ? task.result.evidenceReferences : [];
+      const sourceAssessment = task.result?.sourceAssessment || {};
+      const sourceWarnings = Array.isArray(sourceAssessment.warnings) ? sourceAssessment.warnings : [];
       const sourceLines = sources.slice(0, 6).map((source) =>
         '- ' + source.title + ' [' + source.evidenceId + ']' +
         (source.sourceUrl ? '\n  ' + source.sourceUrl : '') +
@@ -676,6 +682,9 @@ function registerCommands(bot) {
         'النتيجة: ' + String(summary).slice(0, 700),
         claims.length ? '\nالادعاءات المعتمدة بالأدلة:\n' + claimLines.join('\n') : '\nلا توجد ادعاءات موثقة محفوظة.',
         sourceLines.length ? '\nالمصادر:\n' + sourceLines.join('\n') : '',
+        sourceAssessment.evidenceCount !== undefined
+          ? '\nتقييم تنوع المصادر: ' + sourceAssessment.evidenceCount + ' سجل، ' + (sourceAssessment.uniqueWebHostCount || 0) + ' نطاق ويب' + (sourceWarnings.length ? ' — ' + sourceWarnings.join(', ') : '')
+          : '',
         blockedCount ? '\nالطلبات المحجوبة: ' + blockedCount : '',
         '',
         'سجل الأحداث:',

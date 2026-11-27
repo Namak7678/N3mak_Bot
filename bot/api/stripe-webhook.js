@@ -66,7 +66,10 @@ async function handler(req, res) {
     res,
     async () => {
       await ensureDbReady();
-      await creditDeposit(telegramId, amountUsd, session.id);
+      const credit = await creditDeposit(telegramId, amountUsd, session.id);
+      // Stripe may retry a webhook after the database commit. The unique session
+      // key prevents duplicate credit; suppress duplicate Telegram confirmations too.
+      if (!credit.applied) return;
       await bot.telegram.sendMessage(
         telegramId,
         `✅ Deposit confirmed: $${amountUsd}. Your wallet has been credited.\nUse /portfolio to check your balance.`,

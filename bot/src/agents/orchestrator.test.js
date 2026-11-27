@@ -299,3 +299,56 @@ test('does not complete a task when its deadline passes during the reviewer call
   assert.equal(store.rows.get(task.taskId).status, 'failed');
   assert.equal(store.rows.get(task.taskId).result.code, 'TASK_EXPIRED');
 });
+
+
+test('holds research completion when a required question has no evidence-linked answer', async () => {
+  const store = fakeStore();
+  const orchestrator = createOrchestrator({
+    store,
+    runAgent: async (input) => ({
+      status: 'completed',
+      summary: input.reviewOnly ? 'Reviewed.' : 'Research draft.',
+      claims: [{ text: 'Demand exists.', evidenceIds: ['evidence-1'], questionIds: ['market'] }],
+      proposedActions: [],
+    }),
+  });
+  const task = makeTask({
+    researchBrief: { questions: [
+      { id: 'market', question: 'Is there demand?', required: true },
+      { id: 'pricing', question: 'What price is viable?', required: true },
+    ] },
+  });
+  await orchestrator.submit(task);
+  const result = await orchestrator.run(task.taskId);
+  assert.equal(result.status, 'needs_evidence');
+  assert.equal(result.code, 'REQUIRED_RESEARCH_QUESTIONS_UNANSWERED');
+  assert.deepEqual(result.researchCoverage.unansweredRequired, ['pricing']);
+  assert.equal(store.rows.get(task.taskId).status, 'needs_evidence');
+});
+
+test('completes a research brief only after every required question has a cited claim', async () => {
+  const store = fakeStore();
+  const orchestrator = createOrchestrator({
+    store,
+    runAgent: async (input) => ({
+      status: 'completed',
+      summary: input.reviewOnly ? 'Reviewed.' : 'Research draft.',
+      claims: [
+        { text: 'Demand exists.', evidenceIds: ['evidence-1'], questionIds: ['market'] },
+        { text: 'Price evidence captured.', evidenceIds: ['evidence-1'], questionIds: ['pricing'] },
+      ],
+      proposedActions: [],
+    }),
+  });
+  const task = makeTask({
+    researchBrief: { questions: [
+      { id: 'market', question: 'Is there demand?', required: true },
+      { id: 'pricing', question: 'What price is viable?', required: true },
+    ] },
+  });
+  await orchestrator.submit(task);
+  const result = await orchestrator.run(task.taskId);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.researchCoverage.complete, true);
+  assert.equal(result.researchCoverage.coveredQuestions, 2);
+});

@@ -57,6 +57,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
 
     const results = [];
     let calls = 0;
+    const taskExpired = () => Date.parse(task.expiresAt) <= clock().getTime();
     const maxTokensPerCall = Math.max(1, Math.floor(task.budget.maxTokens / task.budget.maxModelCalls));
     const roles = task.roles.filter((role) => role !== 'reviewer');
     const reviewerAssigned = task.roles.includes('reviewer');
@@ -103,6 +104,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
     }
 
     for (const role of roles) {
+      if (taskExpired()) return fail('failed', 'TASK_EXPIRED');
       if (calls >= task.budget.maxModelCalls) return fail('failed', 'MODEL_CALL_BUDGET_EXHAUSTED');
       const remainingMs = Math.max(1, Math.min(task.budget.timeoutMs, Date.parse(task.expiresAt) - clock().getTime()));
       const allowedTools = getRoleCapabilities(role).filter((tool) => task.allowedTools.includes(tool));
@@ -118,6 +120,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
           reviewOnly: false,
           budget: { ...task.budget, maxTokens: maxTokensPerCall, remainingMs, callNumber: calls },
         }), remainingMs);
+        if (taskExpired()) return fail('failed', 'TASK_EXPIRED');
         const result = validateAgentResult(raw);
         const evidence = validateEvidenceReferences(result, task.evidenceIds);
         if (!evidence.valid) {
@@ -164,6 +167,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
     let finalReview = null;
     let reviewActionDecisions = [];
     if (reviewerAssigned) {
+      if (taskExpired()) return fail('failed', 'TASK_EXPIRED');
       if (calls >= task.budget.maxModelCalls) return fail('failed', 'MODEL_CALL_BUDGET_EXHAUSTED');
       const remainingMs = Math.max(1, Math.min(task.budget.timeoutMs, Date.parse(task.expiresAt) - clock().getTime()));
       try {
@@ -178,6 +182,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
           reviewOnly: true,
           budget: { ...task.budget, maxTokens: maxTokensPerCall, remainingMs, callNumber: calls },
         }), remainingMs);
+        if (taskExpired()) return fail('failed', 'TASK_EXPIRED');
         finalReview = validateAgentResult(raw);
         const evidence = validateEvidenceReferences(finalReview, task.evidenceIds);
         if (!evidence.valid) {
@@ -242,6 +247,7 @@ function createOrchestrator({ store, runAgent, clock = () => new Date() } = {}) 
       modelCalls: calls,
       sideEffectsExecuted: 0,
     };
+    if (taskExpired()) return fail('failed', 'TASK_EXPIRED');
     const completed = await store.transitionTask(taskId, 'running', 'completed', {
       result,
       event: { type: 'task.completed', actor: 'orchestrator', payload: { modelCalls: calls } },

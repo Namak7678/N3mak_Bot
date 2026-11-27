@@ -92,3 +92,12 @@ This is a repository-level screening, not a security audit. Counts and setup not
 4. Keep semantic claim-to-passage support and contradiction detection as reviewer-assisted, fallible checks until offline fixtures demonstrate acceptable precision and recall.
 5. Only reconsider an external component after a measured gap remains, the license is confirmed, and its dependency/resource footprint is compatible with the existing bot and low-resource Windows workstation.
 
+## Research question coverage engine — implementation status
+
+The existing Node control core now accepts an optional bounded `researchBrief` with 1–8 stable question IDs. Claims may link to one or more question IDs. The deterministic coverage assessor counts only claims that carry evidence IDs and emits per-question `covered` or `unanswered` status, supporting claim counts, and evidence IDs.
+
+When a brief is supplied, the orchestrator refuses to mark the task `completed` while any required question remains unanswered; it transitions to `needs_evidence` and returns the unanswered question IDs. Telegram completion reports display the coverage ratio.
+
+This is deliberately a minimum, deterministic gate. It does not yet support `partial` or `contradicted` statuses, semantic entailment, or automatic gap-search retries. A question marked covered means at least one reviewer-approved claim is linked to it and cites an evidence ID; it does not prove that the cited passage semantically answers the question. Those stronger judgments require separate evaluation and must remain reviewer-assisted.
+
+Offline unit tests were added for question mapping, unknown question IDs, evidence-free claims, required-question blocking, and successful coverage. CI must still run against the exact branch head before this implementation is treated as verified.

@@ -72,3 +72,23 @@ Before adopting any project: verify current license, maintenance, security postu
 ## Non-goals and safety
 
 No automatic publishing, messaging, payments, account changes, repository writes, deployments or external actions. No paid provider or new hosted database. Do not equate citation existence with factual truth. Keep source text untrusted and never execute instructions found inside evidence.
+
+## External project evaluation — 2026-11-27
+
+This is a repository-level screening, not a security audit. Counts and setup notes are a point-in-time snapshot and can change.
+
+| Project | Observed strengths | Constraints and adoption decision |
+|---|---|---|
+| [Reliable Deep Research](https://github.com/hilzlzl/reliable-deep-research) | MIT license; durable research task execution, question-oriented coverage, citation support audits and bounded repair are directly relevant to the next N3MAK research milestone. | Python/LangGraph/SQLite stack; live mode documents paid model and search calls. **Adopt design patterns only**: stable question requirements, coverage audit, bounded gap repair and inspectable failure records. Do not import its runtime. |
+| [ResearchFlow](https://github.com/Olitk-n/ResearchFlow) | MIT license; local-first source aggregation, DOI/arXiv/title deduplication, evidence extraction, coverage matrices, dataset-license gates and provenance. Repository overview showed 22 commits. | Full product spans FastAPI, Next.js and optional PostgreSQL/Redis/Celery/Docker. One public star at review time is not a maturity signal. **Evaluate small patterns only**: canonical source normalization, source diversity and evidence provenance; no platform adoption. |
+| [openscience](https://github.com/Hylouis233/openscience) | MIT license; staged research lifecycle, citation metadata verification, append-only provenance and explicit human approval gates. | Five commits shown at review time; quick start requires Python 3.11, uv and Claude Code, with optional external connectors. **Borrow the approval-stage and citation-resolution contracts**, not its plugin/runtime stack. |
+| [SciRAG](https://github.com/yale-nlp/SciRAG) | Adaptive sub-question retrieval, citation-graph expansion, reranking and outline-guided synthesis; seven commits and 15 stars shown at review time. | Research-code orientation; README asks users to configure Semantic Scholar and model API keys, and recommends dense retrieval over a 45-million-paper corpus. No license was visible in the repository overview inspected. **Research reference only** until license, dependency and reproducibility checks are complete. |
+
+### Decision for N3MAK
+
+1. **Do not add any of these repositories as a runtime dependency.** The current Node/PostgreSQL control core already owns task state, evidence integrity, budgets and policy. A second orchestration stack would duplicate those responsibilities and increase operational cost.
+2. Implement the next capability natively: a bounded research brief with stable question IDs, per-question evidence links, explicit coverage states (covered, partial, unanswered, contradicted), and a reviewer coverage audit.
+3. Add source diversity and canonical-URL duplicate detection as deterministic metadata checks. These checks must flag duplicate or narrow source sets; they must not claim semantic truth.
+4. Keep semantic claim-to-passage support and contradiction detection as reviewer-assisted, fallible checks until offline fixtures demonstrate acceptable precision and recall.
+5. Only reconsider an external component after a measured gap remains, the license is confirmed, and its dependency/resource footprint is compatible with the existing bot and low-resource Windows workstation.
+

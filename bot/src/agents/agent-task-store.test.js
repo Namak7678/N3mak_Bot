@@ -163,3 +163,18 @@ test('evidence schema enforces immutable records through a database trigger', as
   assert.match(calls[0].sql, /BEFORE UPDATE OR DELETE ON n3mak_agent_evidence/);
   assert.match(calls[0].sql, /n3mak agent evidence is immutable/);
 });
+
+test('aggregates durable task counts by lifecycle status', async () => {
+  const { db, calls } = fakeDatabase();
+  db.query = async (sql, params = []) => {
+    const normalized = sql.replace(/\s+/g, ' ').trim();
+    calls.push({ sql: normalized, params });
+    return { rowCount: 2, rows: [{ status: 'completed', count: 8 }, { status: 'running', count: 2 }] };
+  };
+  const store = createAgentTaskStore({ db });
+
+  const counts = await store.getTaskStatusCounts();
+
+  assert.deepEqual(counts, [{ status: 'completed', count: 8 }, { status: 'running', count: 2 }]);
+  assert.match(calls[0].sql, /GROUP BY status/);
+});
